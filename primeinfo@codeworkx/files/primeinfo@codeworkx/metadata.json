@@ -1,0 +1,7 @@
+{
+    "dangerous": true, 
+    "description": "Shows temperatures, voltages and fan speeds from ASUS Prime-X370 PRO Mainboard", 
+    "uuid": "primeinfo@codeworkx", 
+    "name": "ASUS Prime-X370 PRO Info",
+    "version": "1.0.0"
+}
