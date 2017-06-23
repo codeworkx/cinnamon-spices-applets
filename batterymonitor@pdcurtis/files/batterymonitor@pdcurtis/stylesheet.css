@@ -5,30 +5,52 @@ NOTE: It will be overwritten when the applet is updated so save your modificatio
 */
 
 .bam-normal {
+
 background-color: rgba(0,255,0,0.3);
- border-radius: 10px;
+border-radius: 10px;
+border: 2px;
+border-color: rgba(0,255,0,0.3);
+font-size: 95%;
+}
+
+.bam-discharging {
+background-color: rgba(0,255,0,0.3);
+border-radius: 10px;
+border: 2px;
+border-color: red;
+font-size: 95%;
 }
 
 .bam-alert {
 background-color: orange;
- border-radius: 10px;
+border-radius: 10px;
+border: 2px;
+border-color: orange;
+font-size: 95%;
 }
 
-.bam-alert2 {
+.bam-alert-discharging {
 background-color: white;
- border-radius: 10px;
+border-radius: 10px;
+border: 2px;
+border-color: red;
+font-size: 95%;
 }
 
 .bam-limit-exceeded {
 background-color: red;
- border-radius: 10px;
+border-radius: 10px;
+font-size: 95%;
 }
 
 .bam-limit-exceeded2 {
 background-color: white;
- border-radius: 10px;
+border-radius: 10px;
+font-size: 95%;
 }
 
 /*
 Last Modified 17 September 2016
+Last Modified 29 March 2017
+Last Modified 7 June 2017
 */

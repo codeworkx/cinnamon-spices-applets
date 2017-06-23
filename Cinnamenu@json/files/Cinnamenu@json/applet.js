@@ -1,7 +1,7 @@
 /* ========================================================================================================
  * applet.js - Cinnamenu extension
  * --------------------------------------------------------------------------------------------------------
- *  CREDITS: 
+ *  CREDITS:
  *  Forked from Gnomenu by The Panacea Projects - https://github.com/The-Panacea-Projects/Gnomenu.
  *  Ported to Cinnamon by Jason Hicks.
  *  A large part of this code was copied from the Mint menu and Axe menu extensions. Many thanks
@@ -27,7 +27,6 @@ const Lang = imports.lang;
 const AppFavorites = imports.ui.appFavorites;
 const PopupMenu = imports.ui.popupMenu;
 const Util = imports.misc.util;
-//const DND = imports.ui.dnd;
 const Applet = imports.ui.applet;
 const Settings = imports.ui.settings;
 
@@ -35,17 +34,16 @@ const AppletDir = imports.ui.appletManager.applets['Cinnamenu@json'];
 
 // l10n
 const Gettext = imports.gettext;
-const UUID = "Cinnamenu@json";
-Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale");
+const UUID = 'Cinnamenu@json';
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + '/.local/share/locale');
 
 function _(str) {
-    let cinnamonTranslation = Gettext.gettext(str);
-    if(cinnamonTranslation != str) {
-        return cinnamonTranslation;
-    }
-    return Gettext.dgettext(UUID, str);
+  let cinnamonTranslation = Gettext.gettext(str);
+  if (cinnamonTranslation !== str) {
+    return cinnamonTranslation;
+  }
+  return Gettext.dgettext(UUID, str);
 }
-
 
 const CinnamenuPanel = AppletDir.panel.CinnamenuPanel;
 
@@ -151,13 +149,13 @@ CinnamenuButton.prototype = {
         if (this.menuIcon === '') {
           this.set_applet_icon_name('');
         } else if (GLib.path_is_absolute(this.menuIcon) && GLib.file_test(this.menuIcon, GLib.FileTest.EXISTS)) {
-          if (this.menuIcon.search('-symbolic') != -1) {
+          if (this.menuIcon.search('-symbolic') !== -1) {
             this.set_applet_icon_symbolic_path(this.menuIcon);
           } else {
             this.set_applet_icon_path(this.menuIcon);
           }
         } else if (Gtk.IconTheme.get_default().has_icon(this.menuIcon)) {
-          if (this.menuIcon.search('-symbolic') != -1) {
+          if (this.menuIcon.search('-symbolic') !== -1) {
             this.set_applet_icon_symbolic_name(this.menuIcon);
           } else {
             this.set_applet_icon_name(this.menuIcon);
@@ -176,13 +174,12 @@ CinnamenuButton.prototype = {
       this._applet_icon_box.show();
     }
 
-    if (this.orientation == St.Side.LEFT || this.orientation == St.Side.RIGHT) // no menu label if in a vertical panel
-    {
+    if (this.orientation === St.Side.LEFT || this.orientation === St.Side.RIGHT) {
       this.set_applet_label('');
     } else {
-      if (this.panelMenuLabelText !== '') {
-        this.set_applet_label(_(this.menuLabel)); // TBD
-        this.set_applet_tooltip(_(this.menuLabel));
+      if (!this.panelMenuLabelText || this.panelMenuLabelText.length > 0) {
+        this.set_applet_label(this.menuLabel); // TBD
+        this.set_applet_tooltip(this.menuLabel);
       } else {
         this.set_applet_label('');
       }
@@ -330,6 +327,15 @@ CinnamenuButton.prototype = {
         key: 'enable-autoscroll',
         value: 'enableAutoScroll',
         cb: null
+      },
+      {
+        key: 'enable-bookmarks',
+        value: 'enableBookmarks',
+        cb: Lang.bind(this, function() {
+          if (this.cinnamenuPanel) {
+            this.cinnamenuPanel.refresh();
+          }
+        })
       },
       {
         key: 'menu-label',

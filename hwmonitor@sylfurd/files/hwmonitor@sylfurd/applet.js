@@ -19,41 +19,78 @@ with Foobar. If not, see http://www.gnu.org/licenses/.
 
 const Applet = imports.ui.applet;
 const Cinnamon = imports.gi.Cinnamon;
-const GTop = imports.gi.GTop;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const PopupMenu = imports.ui.popupMenu;
 const St = imports.gi.St;
 const Cairo = imports.cairo;
+const Main = imports.ui.main;
+const Gettext = imports.gettext;
+const GLib = imports.gi.GLib;
+// Width of the applet will be ScaleRatio-times the height of it.
+const ScaleRatio = 3;
 
-function MyApplet(orientation) {
-	this._init(orientation);
+const UUID = "hwmonitor@sylfurd";
+let NoInstdeps = false;
+
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale");
+function _(str) {
+  return Gettext.dgettext(UUID, str)
+}
+
+try {
+  var GTop = imports.gi.GTop;
+} catch(e){
+  let icon = new St.Icon({ icon_name: 'utilities-system-monitor',
+                           icon_type: St.IconType.FULLCOLOR,
+                           icon_size: 24 });
+  Main.criticalNotify(_("Dependence missing"), _("Please install the GTop package\n" +
+      "\tUbuntu / Mint: gir1.2-gtop-2.0\n" +
+      "\tFedora: libgtop2-devel\n" +
+      "\tArch: libgtop\n" +_(
+			"to use the applet %s")).format(UUID), icon);
+  NoInstdeps = true;
+}
+
+function MyApplet(metadata, orientation, panel_height) {
+    this._init(metadata, orientation, panel_height);
 }
 
 MyApplet.prototype = {
-	__proto__: Applet.Applet.prototype,
+	__proto__: Applet.IconApplet.prototype,
 
-    _init: function(orientation) {
-        Applet.Applet.prototype._init.call(this, orientation);
+    _init: function (metadata, orientation, panel_height) {
+        Applet.IconApplet.prototype._init.call(this, orientation, panel_height);
+
+        this.graphs = [];
 
 		try {
-			this.itemOpenSysMon = new PopupMenu.PopupMenuItem("Open System Monitor");
+
+			if (NoInstdeps)
+			{
+			  this.set_applet_icon_path(metadata.path + "/icon.png");
+			  this.set_applet_tooltip(metadata.description);
+			  return;
+			}
+
+			this.itemOpenSysMon = new PopupMenu.PopupMenuItem(_("Open System Monitor"));
 			this.itemOpenSysMon.connect('activate', Lang.bind(this, this._runSysMonActivate));
 			this._applet_context_menu.addMenuItem(this.itemOpenSysMon);
 
-			this.graphArea = new St.DrawingArea();
-			this.graphArea.width = 88;
-			this.graphArea.connect('repaint', Lang.bind(this, this.onGraphRepaint));
+            this.graphArea = new St.DrawingArea();
+            this.graphArea.height = this._panelHeight;
+            // Request space for two graphs where w=h*ScaleRatio each
+            this.graphArea.width = (this._panelHeight * ScaleRatio * 2);
+            this.graphArea.connect('repaint', Lang.bind(this, this.onGraphRepaint));
 
 			this.actor.add_actor(this.graphArea);
 
 			let cpuProvider =  new CpuDataProvider();
 			let memProvider =  new MemDataProvider();
 
-			let cpuGraph = new Graph(this.graphArea, cpuProvider);
-			let memGraph = new Graph(this.graphArea, memProvider);
+            let cpuGraph = new Graph(this.graphArea, cpuProvider, this._panelHeight);
+            let memGraph = new Graph(this.graphArea, memProvider, this._panelHeight);
 
-			this.graphs = new Array();
 			this.graphs[0] = cpuGraph;
 			this.graphs[1] = memGraph;
 
@@ -74,11 +111,11 @@ MyApplet.prototype = {
 
 	_update: function() {
 
-		for (i = 0; i < this.graphs.length; i++)
+		for (let i = 0; i < this.graphs.length; i++)
 		{
 			this.graphs[i].refreshData();
 		}
-			
+
 		this.graphArea.queue_repaint();
 
 		Mainloop.timeout_add(500, Lang.bind(this, this._update));
@@ -90,50 +127,51 @@ MyApplet.prototype = {
 		_gsmApp.activate();
 	},
 
-	onGraphRepaint: function(area) {
-		try {
-			for (index = 0; index < 2; index++)
-			{
-				area.get_context().translate(index*45, 0);
-				this.graphs[index].paint(area);
-			}
-		}catch(e)
-		{
-			global.logError(e);
-		}
-	}
+    onGraphRepaint: function (area) {
+        try {
+            this.graphArea.height = this._panelHeight;
+            // Request space for two graphs where w=h*ScaleRatio each
+            this.graphArea.width = (this._panelHeight * ScaleRatio * 2);
+            for (let index = 0; index < 2; index++) {
+                area.get_context().translate((index * (this._panelHeight * ScaleRatio)), 0);
+                this.graphs[index].paint(area, this._panelHeight);
+            }
+        } catch (e) {
+            global.logError(e);
+        }
+    }
 };
 
-function Graph(area, provider) {
-	this._init(area, provider);
+function Graph(area, provider, panel_height) {
+    this._init(area, provider, panel_height);
 }
 
 Graph.prototype = {
-	
-	_init: function(_area, _provider) {
-		this.width = 41;
-		let [w, h] = _area.get_surface_size();
-		this.datas = new Array(this.width);
 
-		for (i = 0; i <this.datas.length; i++)
-        {
-        	this.datas[i] = 0;
+    _init: function (_area, _provider, panel_height) {
+        this.width = (panel_height * ScaleRatio) - 3;
+
+        this.datas = new Array(this.width);
+
+        for (let i = 0; i < this.datas.length; i++) {
+            this.datas[i] = 0;
         }
 
-		this.height = 20;
-		this.provider = _provider;
+        this.height = panel_height - 2;
+        this.provider = _provider;
 
-	},
+    },
 
-	paint: function(area)
-	{
-		let cr = area.get_context();
+    paint: function (area, panel_height) {
+        this.width = (panel_height * ScaleRatio) - 3;
+        this.height = panel_height - 2;
+        let cr = area.get_context();
 
 		// Border
         cr.setSourceRGBA(1, 1, 1, 0.9);
         cr.setLineWidth(1);
         cr.rectangle(0.5, 0.5, this.width+0.5, this.height+0.5);
-        cr.stroke(); 
+        cr.stroke();
 
 		// Background
         let gradientHeight = this.height-1;
@@ -173,7 +211,7 @@ Graph.prototype = {
         cr.setLineWidth(0);
         cr.moveTo(1, this.height - this.datas[0]);
 
-        for (i = 1; i <this.datas.length; i++)
+        for (let i = 1; i <this.datas.length; i++)
         {
         	cr.lineTo(1+i, this.height - this.datas[i]);
         }
@@ -189,7 +227,7 @@ Graph.prototype = {
         pattern.addColorStopRGBA(0.5, 1, 1, 0.2, 1);
         pattern.addColorStopRGBA(0.7, 0.4, 1, 0.3, 1);
         pattern.addColorStopRGBA(1, 0.2, 0.7, 1, 1);
-        
+
         cr.fill();
 
         // Label
@@ -212,7 +250,7 @@ Graph.prototype = {
 			this.datas.shift();
 		}
 	}
-	
+
 };
 
 function CpuDataProvider() {
@@ -220,13 +258,13 @@ function CpuDataProvider() {
 }
 
 CpuDataProvider.prototype = {
-	
+
 	_init: function(){
 		this.gtop = new GTop.glibtop_cpu();
 		this.current = 0;
 		this.last = 0;
 		this.usage = 0;
-		this.last_total = 0;		
+		this.last_total = 0;
 	},
 
 	getData: function()
@@ -248,7 +286,7 @@ CpuDataProvider.prototype = {
 
 	getName: function()
 	{
-		return "CPU";
+		return _("CPU");
 	}
 };
 
@@ -257,7 +295,7 @@ function MemDataProvider() {
 }
 
 MemDataProvider.prototype = {
-	
+
 	_init: function(){
 			this.gtopMem = new GTop.glibtop_mem();
 	},
@@ -271,12 +309,11 @@ MemDataProvider.prototype = {
 
 	getName: function()
 	{
-		return "MEM";
+		return _("MEM");
 	}
 };
 
 
-function main(metadata, orientation) {
-	let myApplet = new MyApplet(orientation);
-	return myApplet;
+function main(metadata, orientation, panel_height) {
+    return new MyApplet(metadata, orientation, panel_height);
 }

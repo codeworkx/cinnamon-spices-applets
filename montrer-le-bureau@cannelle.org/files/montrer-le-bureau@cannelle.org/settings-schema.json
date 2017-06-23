@@ -17,7 +17,7 @@
     "type": "entry",
     "default": "VLC_Capture",
     "description": "Output file name:",
-    "tooltip": "Just a name. The time and extension will be add automatically."
+    "tooltip": "Just a name. The time and extension will be added automatically."
 },
   "audio-settings-header": { 
     "type": "header",
@@ -30,12 +30,17 @@
     "type": "combobox",
     "description": "Audio codec:",
     "default": "mpga",
-    "tooltip": "Select a audio codec.",
+    "tooltip": "Select an audio codec.",
     "options" : {
     "MPG": "mpga",
     "MP3": "mp3",
     "AAC": "mp4",
-    "AC3": "a52"
+    "AC3": "a52",
+    "VORBIS": "vorb",
+    "FLAC": "flac",
+    "OPUS": "opus",
+    "SPEEX": "spx",
+    "WAV": "wav"
     }
 },
   "audio-samplerate": {
@@ -70,7 +75,7 @@
     "step": 1,
     "description": "Audio channels:"
 },
-  "video-settings": { 
+  "video-settings-header": { 
     "type": "header",
     "description": "VIDEO SETTINGS"
 },
@@ -83,10 +88,13 @@
     "default": "h264",
     "tooltip": "Select a video codec.",
     "options" : {
-    "H264": "h264",
+    "MPEG-2": "mp2v",
     "MPEG-4": "mp4v",
+    "H264": "h264",
     "HEVC": "h265",
-    "MPEG-2": "mp2v"
+    "THEORA": "theora",
+    "M-JPEG": "mjpeg",
+    "VP8": "vp8"
      }
 },
   "video-framerate": { 
@@ -115,8 +123,13 @@
     "options" : {
     "MP4": "mp4",
     "MKV": "mkv",
-    "MPEG-TS": "ts"
-        }
+    "MPEG-TS": "ts",
+    "MPEG-PS": "mpeg",
+    "WEBM": "webm",
+    "OGG/OGM": "ogg",
+    "MJPEG": "mjpeg",
+    "AVI": "avi"
+    }
 },
   "increase-caching" : {
     "type" : "checkbox",
@@ -137,8 +150,8 @@
   "video-filter-crop" : {
     "type" : "checkbox",
     "default" : false,
-    "description": "Check this to select a cropping areas:",
-    "tooltip": "Checking this box allows you to set a custom areas from the screen, that will be cropped. The cropped pixels will not be visible."
+    "description": "Check this to select a cropping area:",
+    "tooltip": "Checking this box allows you to set a custom area from the screen, that will be cropped. The cropped pixels will not be visible."
 },
   "crop-left" : {
     "type": "spinbutton",
@@ -149,7 +162,7 @@
     "units" : "pixels",
     "dependency" : "video-filter-crop",
     "description" : "Crop from the left:",
-    "tooltip" : "The value must be lower then your screen width"
+    "tooltip" : "The value must be lower than your screen width"
 },
   "crop-top" : {
     "type": "spinbutton",
@@ -160,7 +173,7 @@
     "units" : "pixels",
     "dependency" : "video-filter-crop",
     "description" : "Crop from the top:",
-    "tooltip" : "The value must be lower then your screen height"
+    "tooltip" : "The value must be lower than your screen height"
 },
   "crop-right" : {
     "type": "spinbutton",
@@ -171,7 +184,7 @@
     "units" : "pixels",
     "dependency" : "video-filter-crop",
     "description" : "Crop from the right:",
-    "tooltip" : "The value must be lower then your screen width"
+    "tooltip" : "The value must be lower than your screen width"
 },
   "crop-bottom" : {
     "type": "spinbutton",
@@ -182,7 +195,91 @@
     "units" : "pixels",
     "dependency" : "video-filter-crop",
     "description" : "Crop from the bottom:",
-    "tooltip" : "The value must be lower then your screen height"
- }
+    "tooltip" : "The value must be lower than your screen height"
+ },
+    "video-filter-logo": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Add logo",
+        "tooltip": "Use a local picture as logo on the video"
+    },
+    "logo-file": {
+        "type": "filechooser",
+        "dependency": "video-filter-logo",
+        "default": "/usr/share/icons/hicolor/48x48/apps/vlc.png",
+        "description": "Logo sub source:",
+        "tooltip": "Full path of the image file to use."
+    },
+    "logo-position": {
+        "type": "combobox",
+        "dependency": "video-filter-logo",
+        "description": "Logo position:",
+        "default": "6",
+        "tooltip": "Enforce the logo position on the video.",
+        "options": {
+            "Center": "0",
+            "Left": "1",
+            "Right": "2",
+            "Top": "4",
+            "Top-Left": "5",
+            "Top-Right": "6",
+            "Bottom": "8",
+            "Bottom-Left": "9",
+            "Bottom-Right": "10"
+        }
+    },
+    "logo-y": {
+        "type": "spinbutton",
+        "default": 25,
+        "min": -2147483648,
+        "max": 2147483647,
+        "step": 1,
+        "units": "pixels",
+        "dependency": "video-filter-logo",
+        "description": "Y coordinate:",
+        "tooltip": "Y coordinate of the logo."
+    },
+    "logo-x": {
+        "type": "spinbutton",
+        "default": 25,
+        "min": -2147483648,
+        "max": 2147483647,
+        "step": 1,
+        "units": "pixels",
+        "dependency": "video-filter-logo",
+        "description": "X coordinate:",
+        "tooltip": "X coordinate of the logo."
+    },
+    "logo-opacity": {
+        "type": "spinbutton",
+        "default": 250,
+        "min": 0,
+        "max": 250,
+        "step": 1,
+        "units": "value",
+        "dependency": "video-filter-logo",
+        "description": "Logo opacity:",
+        "tooltip": "Logo opacity value (from 0 for full transparency to 255 for full opacity)."
+    },
+  "misc-settings-header": { 
+    "type": "header",
+    "description": "OTHER SETTINGS"
+},
+  "screen-shot-separator": { 
+    "type": "separator"
+},
+    "use-screen-shot": {
+        "type": "checkbox",
+        "default": false,
+        "description": "Allow middle click action",
+        "tooltip": "Adding ability to take some action with mouse middle button"
+},
+    "ss-tool": {
+        "type": "filechooser",
+        "dependency": "use-screen-shot",
+        "description": "Middle button tool:",
+        "default": "/usr/bin/gnome-screenshot",
+        "tooltip": "Select the full path to middle button tool. If you want to pass some arguments, you might create a simple shell script, then select it here."
+    }
 }
 

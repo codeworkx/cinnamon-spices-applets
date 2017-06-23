@@ -15,8 +15,22 @@ const Settings = imports.ui.settings; // ++ Needed if you use Settings Screen
 const St = imports.gi.St; // ++
 const PopupMenu = imports.ui.popupMenu; // ++ Needed for menus
 const Lang = imports.lang; //  ++ Needed for menus
-const GLib = imports.gi.GLib; // ++ Needed for starting programs
+const GLib = imports.gi.GLib; // ++ Needed for starting programs and translations
 const Mainloop = imports.mainloop; // Needed for timer update loop
+const Gettext = imports.gettext; // ++ Needed for translations
+const Main = imports.ui.main; // ++ Needed for criticalNotify()
+
+// ++ Always needed for localisation/translation support
+// l10n support thanks to ideas from @Odyseus, @lestcape and @NikoKrause
+// UUID is set in MyApplet _init: below and before function called
+
+var UUID;
+function _(str) {
+    let customTrans = Gettext.dgettext(UUID, str);
+    if (customTrans !== str && customTrans !== "")
+        return customTrans;
+    return Gettext.gettext(str);
+}
 
 // ++ Always needed
 function MyApplet(metadata, orientation, panelHeight, instance_id) {
@@ -25,18 +39,27 @@ function MyApplet(metadata, orientation, panelHeight, instance_id) {
 
 // ++ Always needed
 MyApplet.prototype = {
-    __proto__: Applet.TextApplet.prototype, // Text Applet
+    __proto__: Applet.TextIconApplet.prototype, // Now TextIcon Applet
 
     _init: function (metadata, orientation, panelHeight, instance_id) {
-        Applet.TextApplet.prototype._init.call(this, orientation, panelHeight, instance_id);
+        Applet.TextIconApplet.prototype._init.call(this, orientation, panelHeight, instance_id);
         try {
             this.settings = new Settings.AppletSettings(this, metadata.uuid, instance_id); // ++ Picks up UUID from metadata for Settings
 
+            if (this.versionCompare( GLib.getenv('CINNAMON_VERSION') ,"3.2" ) >= 0 ){
+                 this.setAllowedLayout(Applet.AllowedLayout.BOTH); 
+            }
             this.settings.bindProperty(Settings.BindingDirection.IN, // Setting type
                 "refreshInterval-spinner", // The setting key
                 "refreshInterval", // The property to manage (this.refreshInterval)
                 this.on_settings_changed, // Callback when value changes
                 null); // Optional callback data
+
+            this.settings.bindProperty(Settings.BindingDirection.IN,
+                "showGpuTemp",
+                "showGpuTemp",
+                this.on_settings_changed,
+                null);
 
             this.settings.bindProperty(Settings.BindingDirection.IN,
                 "description1",
@@ -95,21 +118,41 @@ MyApplet.prototype = {
 
             // ++ Make metadata values available within applet for context menu.
             this.cssfile = metadata.path + "/stylesheet.css"; // No longer required
-            this.changelog = metadata.path + "/changelog.txt";
+            this.changelog = metadata.path + "/CHANGELOG.md";
             this.helpfile = metadata.path + "/README.md";
-            this.tempfile = metadata.path + "/gputemp.out";
             this.gputempScript= metadata.path + "/gputempscript.sh";
             this.appletPath = metadata.path;
-            this.UUID = metadata.uuid;
+
+            // ++ Part of l10n support;
+            UUID = metadata.uuid;
+            Gettext.bindtextdomain(metadata.uuid, GLib.get_home_dir() + "/.local/share/locale");
+
             this.nvidiagputemp = 0;
 
-            this.applet_running = true; //** New to allow applet to be fully stopped when removed from panel
+            this.nvidea_icon = metadata.path + "/icons/nvidia.png"
+            this.intel_icon = metadata.path + "/icons/prime-tray-intel.png"
+
+            this.on_orientation_changed(orientation); // ++ Initialise for panel orientation
+
+            this.applet_running = true; //** Allow applet to be fully stopped when removed from panel
 
             // Choose Text Editor depending on whether Mint 18 with Cinnamon 3.0 and latter
+            // This could be replaced by use of system editor? but "If it ain't broke don't fix it" 
             if (this.versionCompare( GLib.getenv('CINNAMON_VERSION') ,"3.0" ) <= 0 ){
                this.textEd = "gedit";
             } else { 
                this.textEd = "xed";
+            }
+
+            // Check that Bumblebee Daemen is installed 
+            if (!GLib.find_program_in_path("bumblebeed")) {
+                 let icon = new St.Icon({ icon_name: 'error',
+                 icon_type: St.IconType.FULLCOLOR,
+                 icon_size: 36 });
+                 Main.criticalNotify("Bumblebee program not installed", "You appear to be missing some of the required programs for 'bumblebee' to switch graphics processors using NVIDIA Optimus.\n\nPlease read the help file.", icon);
+                 this.bumblebeeMissing = true;
+            } else {
+                 this.bumblebeeMissing = false;
             }
 
             // ++ Set up left click menu
@@ -122,17 +165,31 @@ MyApplet.prototype = {
             this.makeMenu();
 
             // Make sure the temp file is created
- //           GLib.spawn_command_line_async('sh ' + this.gputempScript );
-             GLib.spawn_command_line_async('touch /tmp/.gpuTemperature');
+             GLib.spawn_command_line_async('touch /tmp/.gpuTemperatureBB');
 
             // Finally setup to start the update loop for the applet display running
             this.set_applet_label(" " ); // show nothing until system stable
-            this.set_applet_tooltip("Waiting for Bumblebee");
-            Mainloop.timeout_add_seconds(20, Lang.bind(this, this.updateLoop)); // Timer to allow bumbleebee to initiate
+            this.set_applet_tooltip(_("Waiting for Bumblebee"));
+            Mainloop.timeout_add_seconds(5, Lang.bind(this, this.updateLoop)); // Timer to allow bumbleebee to initiate
 
         } catch (e) {
             global.logError(e);
         }
+    },
+
+    on_orientation_changed: function (orientation) {
+        this.orientation = orientation;
+        if (this.versionCompare( GLib.getenv('CINNAMON_VERSION') ,"3.2" ) >= 0 ){    
+             if (this.orientation == St.Side.LEFT || this.orientation == St.Side.RIGHT) { 
+                 // vertical
+                 this.isHorizontal = false;
+             } else { 
+                 // horizontal
+                 this.isHorizontal = true;
+             }
+         } else {
+                this.isHorizontal = true;  // Do not check unless >= 3.2
+         }
     },
 
     // Compare two version numbers (strings) based on code by Alexey Bass (albass)
@@ -172,21 +229,19 @@ MyApplet.prototype = {
         this._applet_context_menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         
-        let menuitem1 = new PopupMenu.PopupMenuItem("Open nVidia Settings Program");
+        let menuitem1 = new PopupMenu.PopupMenuItem(_("Open nVidia Settings Program"));
         menuitem1.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async('optirun -b none nvidia-settings -c :8 ');
         }));
         this._applet_context_menu.addMenuItem(menuitem1);
 
-        let menuitem2 = new PopupMenu.PopupMenuItem("Open Power Statistics");
+        let menuitem2 = new PopupMenu.PopupMenuItem(_("Open Power Statistics"));
         menuitem2.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async('gnome-power-statistics');
         }));
         this._applet_context_menu.addMenuItem(menuitem2);
 
-
-
-        this.menuitem3 = new PopupMenu.PopupMenuItem("Open System Monitor");
+        this.menuitem3 = new PopupMenu.PopupMenuItem(_("Open System Monitor"));
         this.menuitem3.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async('gnome-system-monitor');
         }));
@@ -195,16 +250,16 @@ MyApplet.prototype = {
         this._applet_context_menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         // ++ Set up sub menu for Housekeeping and System Items
-        this.subMenu1 = new PopupMenu.PopupSubMenuMenuItem("Housekeeping and System Sub Menu");
+        this.subMenu1 = new PopupMenu.PopupSubMenuMenuItem(_("Housekeeping and System Sub Menu"));
         this._applet_context_menu.addMenuItem(this.subMenu1);
 
-        this.subMenuItem1 = new PopupMenu.PopupMenuItem("View the Changelog");
+        this.subMenuItem1 = new PopupMenu.PopupMenuItem(_("View the Changelog"));
         this.subMenuItem1.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async(this.textEd + ' ' + this.changelog);
         }));
         this.subMenu1.menu.addMenuItem(this.subMenuItem1); // Note this has subMenu1.menu not subMenu1._applet_context_menu as one might expect
 
-        this.subMenuItem2 = new PopupMenu.PopupMenuItem("Open the Help file");
+        this.subMenuItem2 = new PopupMenu.PopupMenuItem(_("Open the Help file"));
         this.subMenuItem2.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async(this.textEd + ' ' + this.helpfile);
         }));
@@ -220,7 +275,7 @@ MyApplet.prototype = {
   try { 
         this.menu.removeAll();
 
-        this.menuitemHead1 = new PopupMenu.PopupMenuItem("Launch programs using the nVidia Graphics Processor", {
+        this.menuitemHead1 = new PopupMenu.PopupMenuItem(_("Launch programs using the nVidia Graphics Processor"), {
             reactive: false
         });
         this.menu.addMenuItem(this.menuitemHead1);
@@ -282,7 +337,8 @@ MyApplet.prototype = {
    try {
 	this.bbswitchStatus = GLib.file_get_contents("/proc/acpi/bbswitch").toString();	
 	this.bbswitchStatus2 = this.bbswitchStatus.substr(  (this.bbswitchStatus.length - 2 ),1 );
-        //  Checking for N as last character in string ensures bbswitch is present and ON before nvidia-settings run 
+        //  Checking for N as last character in string ensures bbswitch is present and ON before nvidia-settings run
+        //  The setting up of strings which are used as flags is probably redundant due to changes made for translations but "if it aint broke dont fix it"
         if (this.bbswitchStatus2 == "N") {
              this.bbst = "ON";
          }
@@ -290,28 +346,50 @@ MyApplet.prototype = {
               this.bbst = "OFF";
          }
       // This catches error if bbswitch and hence bumblebee is not loaded                     
-      } catch (e) {
-//          global.logError(e);  // Comment out to avoid filling error log
-          this.bbst = "ERROR"
-	  this.set_applet_label("ERROR" ); 
-          this.set_applet_tooltip("Bumblebee is not installed so applet willl not work");          
-      } 
+   } catch (e) {
+//          global.logError(e);  // Commented out to avoid filling error log
+        this.bbst = "ERROR";
+   }
+ 
    try {
          if(this.bbst == "OFF") {
-	       this.set_applet_label("GPU OFF" ); 
-               this.set_applet_tooltip("NVidia based GPU is " + this.bbst);
+               this.set_applet_label(""); 
+               this.hide_applet_label(true);
+               this.set_applet_tooltip(_("NVidia based GPU is Off")); 
+               this.set_applet_icon_path(this.intel_icon);
          }
          if(this.bbst == "ON") {
 
-	        this.nvidiagputemp1 = GLib.file_get_contents("/tmp/.gpuTemperature").toString();
+	        this.nvidiagputemp1 = GLib.file_get_contents("/tmp/.gpuTemperatureBB").toString();
                 // Check we have a valid temperature returned before updating 
                 // in case of slow response from nvidia-settings which gives null string
                 if(this.nvidiagputemp1.substr(5,2) > 0){ this.nvidiagputemp = this.nvidiagputemp1.substr(5,2)}; 
-	        this.set_applet_label("GPU " + this.nvidiagputemp + "\u1d3cC" );
-                this.set_applet_tooltip("NVidia based GPU is " + this.bbst + " and Core Temperature is " + this.nvidiagputemp + "\u1d3cC" );
+
+                if (!this.showGpuTemp ) {
+	                  this.set_applet_label("");
+                      this.hide_applet_label(true);
+                 } else { 
+                      this.hide_applet_label(false);
+                      if ( this.nvidiagputemp < 100 || this.isHorizontal )  { 
+                           this.set_applet_label(this.nvidiagputemp + "\u1d3c" );
+                      } else {
+                           this.set_applet_label(this.nvidiagputemp + "" ); // Needs empty string for typing
+                      }
+
+                 }
+
+                this.set_applet_tooltip(_("NVidia based GPU is On and Core Temperature is") + " " + this.nvidiagputemp + "\u1d3cC" );
+                this.set_applet_icon_path(this.nvidea_icon);
+
                 // Get temperatures via asyncronous script ready for next cycle
                 GLib.spawn_command_line_async('sh ' + this.gputempScript );
          } 
+
+         if(this.bbst == "ERROR" || this.bumblebeeMissing) {
+	          this.set_applet_label(_("Err" )); 
+              this.set_applet_tooltip(_("Bumblebee is not set up correctly - are bbswitch, bumblebee and nvidia drivers installed?")); 
+              this.hide_applet_label(false);       
+         }
       } catch (e) {
           global.logError(e);
       }       
@@ -339,7 +417,7 @@ function main(metadata, orientation, panelHeight, instance_id) {
     return myApplet;
 }
 /*
-Version v30_3.1.0
+Version 3.2.2
 v20_0.9.0 Beta 12-12-2013
 v20_0.9.1 Added System Monitor and Power Statistics to right click menu
 v20_0.9.2 Added Left Click Menu with 5 Program Launch Items with configuration in Settings - Release Candidate 14-12-2013 
@@ -360,4 +438,32 @@ v30_3.0.2  NOTE 3.0.1 was not a separate version - it was a mechanism to overwri
 v30_3.0.3  Corrected icon.png in applet folder which is used by Add Applets
 v30_3.0.4  Corrected gputempscript to have correct option commented out
 v30_3.1.0  Changed help file from help.txt to README.md
+    3.1.1  Version numbering harmonised with other Cinnamon applets and added to metadata.json so it can show in 'About...'
+           icon.png copied back into applet folder so it can show in 'About...'
+           Add translation support to applet.js
+           Identify strings for translation and remove leading and trailing spaces and replace with separate spaces where required.
+           Add po folder to applet
+           Create bumblebee.pot using cinnamon-json-makepot --js po/bumblebee.pot
+           Version and changes information update in applet.js and changelog.txt
+    3.1.2  Changes to README.md to: 
+             - Strengthen Rationale for Applet
+             - Add Status section noting testing under Mint 17.3 and 18.1 with Cinnamon 3.2
+             - Acknowledge first translations.
+           Set up default programs on left click menu
+    3.2.0  Major new version to support vertical panels and to use icons instead of text to harmonise with other cinnamon applets such as nvidia-prime
+              - Allow use of vertical as well as horizontal panels after version number check to see if they are supported.
+              - Change to TextIcon applet
+              - Addition of setting to hide temperatures on Horizontal panel.
+              - Changed temporary output file to /tmp/.gpuTemperatureBB to avoid overlap with nvidiaprime applet. 
+              - New Translation function
+              - Changes to improve translation strings
+              - Recreate bumblebee.pot
+              Changes to README.md changelog.txt etc
+### 3.2.1
+ * Use CHANGELOG.md instead of changelog.txt in context menu
+ * Add symbolic link from UUID folder to applet folder so it is displayed on latest spices web site.
+ * Add check that bumblebee daemon is installed.
+### 3.2.2
+ * Allow GPU temperature to be displayed in vertical panels but shorten (by removing the degree symbol) if over 100 degrees on vertical panels.
+ * Update bumblebee.pot to identify changes which need to be translated
 */

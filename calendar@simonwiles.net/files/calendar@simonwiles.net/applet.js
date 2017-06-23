@@ -10,7 +10,7 @@
 
 const EXTENSION_UUID = "calendar@simonwiles.net";
 const APPLET_DIR = imports.ui.appletManager.appletMeta[EXTENSION_UUID].path;
-
+const Gettext = imports.gettext;
 const Applet = imports.ui.applet;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
@@ -25,6 +25,12 @@ const Calendar = AppletDir.calendar;
 const GLib = imports.gi.GLib;
 
 let DEFAULT_FORMAT = _("%l:%M %p");
+
+Gettext.bindtextdomain(EXTENSION_UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(EXTENSION_UUID, str);
+}
 
 function _onVertSepRepaint (area)
 {
@@ -112,7 +118,7 @@ MyApplet.prototype = {
                     this._worldclocks[i][1] = GLib.TimeZone.new(this._worldclocks[i][1]);
 
                     let tz = new St.BoxLayout({vertical: false});
-                    let tz_label = new St.Label({ style_class: "datemenu-date-label", text: this._worldclocks[i][0] });
+                    let tz_label = new St.Label({ style_class: "datemenu-date-label", text: _(this._worldclocks[i][0]) });
                     tz.add(tz_label, {x_align: St.Align.START, expand: true, x_fill: false});
                     this._worldclock_labels[i] = new St.Label({ style_class: "datemenu-date-label" });
                     tz.add(this._worldclock_labels[i], {x_align: St.Align.END, expand: true, x_fill: false});
@@ -190,7 +196,7 @@ MyApplet.prototype = {
         for (var i in this._worldclocks) {
             let tz = this._get_world_time(displayDate, this._worldclocks[i][1]);
             this._worldclock_labels[i].set_text(tz);
-            tooltip.push(rpad(this._worldclocks[i][0], "\xA0", this.max_length + 10) + tz);
+            tooltip.push(rpad(_(this._worldclocks[i][0]), "\xA0", this.max_length + 10) + tz);
         }
         this.set_applet_tooltip(tooltip.join("\n"));
 

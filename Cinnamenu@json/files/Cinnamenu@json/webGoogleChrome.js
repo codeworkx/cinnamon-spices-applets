@@ -30,7 +30,6 @@ const Cinnamon = imports.gi.Cinnamon;
 const Lang = imports.lang;
 
 const _appSystem = Cinnamon.AppSystem.get_default();
-//const _foundApps = _appSystem.initial_search(['google-chrome']);
 const _foundApps = _appSystem.lookup_desktop_wmclass('google-chrome');
 
 var _appInfo = null;
@@ -106,7 +105,6 @@ function init() {
     return;
   }
 
-  //_appInfo = _foundApps[0].get_app_info();
   _appInfo = _foundApps.get_app_info();
 
   _bookmarksFile = Gio.File.new_for_path(GLib.build_filenamev(

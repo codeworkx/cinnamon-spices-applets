@@ -6,7 +6,8 @@ and a 'standard' right click (context) menu which opens
 the settings panel and a Housekeeping submenu accessing
 help and a version/update files and also the gnome system monitor program
 in case you want to find out how much machine power this applet is 
-using at various update rates. 
+using at various update rates. It also an example of how to implement 
+l10n localisation/translation support.
 Items with a ++ in the comment are not specific to this applet and useful for re-use
 */
 const Applet = imports.ui.applet; // ++
@@ -14,16 +15,34 @@ const Settings = imports.ui.settings; // ++ Needed if you use Settings Screen
 const St = imports.gi.St; // ++
 const PopupMenu = imports.ui.popupMenu; // ++ Needed for menus
 const Lang = imports.lang; //  ++ Needed for menus
-const GLib = imports.gi.GLib; // ++ Needed for starting programs
+const GLib = imports.gi.GLib; // ++ Needed for starting programs and translations
+const Gettext = imports.gettext; // ++ Needed for translations
 const Mainloop = imports.mainloop; // Needed for timer update loop
 
-// l10n/translation support
-const Gettext = imports.gettext
+/*
+// Old l10n/translation support thanks to @NikoKrause to be removed next update
+const Gettext = imports.gettext 
 const UUID = "stopwatch@pdcurtis"
 Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
 
 function _(str) {
   return Gettext.dgettext(UUID, str);
+}
+*/
+
+// ++ Always needed if you want localisation/translation support
+// New l10n support thanks to ideas from @Odyseus, @lestcape and @NikoKrause
+// Note UUID is set in MyApplet _init: below and before function called
+// and const Gettext = imports.gettext; is now in list above for consistency
+var UUID;
+
+function _(str) {
+    let customTrans = Gettext.dgettext(UUID, str);
+
+    if (customTrans !== str && customTrans !== "")
+        return customTrans;
+
+    return Gettext.gettext(str);
 }
 
 
@@ -78,19 +97,17 @@ MyApplet.prototype = {
                 this.on_generic_changed,
                 null);
 
-//            this.settings.bindProperty(Settings.BindingDirection.BIDIRECTIONAL, 
-//                "cinnamonVersion", 
-//                "cinnamonVersion", 
-//                this.on_generic_changed, 
-//                null);
-
-
             // ++ Make metadata values available within applet for context menu.
             this.cssfile = metadata.path + "/stylesheet.css"; // No longer required
-            this.changelog = metadata.path + "/changelog.txt";
+            this.changelog = metadata.path + "/CHANGELOG.md";
             this.helpfile = metadata.path + "/README.md";
             this.appletPath = metadata.path;
-            this.UUID = metadata.uuid;
+
+            // ++ Part of new l10n support
+            UUID = metadata.uuid;
+            Gettext.bindtextdomain(metadata.uuid, GLib.get_home_dir() + "/.local/share/locale");
+
+            this.settingsCommand = 'cinnamon-settings applets ' + metadata.uuid;
             this.applet_running = true; //** New
 
             // Choose Text Editor depending on whether Mint 18 with Cinnamon 3.0 and latter
@@ -138,22 +155,22 @@ MyApplet.prototype = {
         }));
         this._applet_context_menu.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem(_("Pause"));
+        menuitem = new PopupMenu.PopupMenuItem(_("Pause"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             this.counterStatus = "paused";
-            this.pausedAt = this,currentCount; // Changed to reduce load on Settings
+            this.pausedAt = this.currentCount; // Changed to reduce load on Settings
             this.updateUI();
         }));
         this._applet_context_menu.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem(_("Reset counter"));
+        menuitem = new PopupMenu.PopupMenuItem(_("Reset counter"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             this.counterStatus = "ready";
             this.updateUI();
         }));
         this._applet_context_menu.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem(_("If paused, continue counting from now"));
+        menuitem = new PopupMenu.PopupMenuItem(_("If paused, continue counting from now"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             if (this.counterStatus == "paused") {
                 this.updateUI();
@@ -164,7 +181,7 @@ MyApplet.prototype = {
         }));
         this._applet_context_menu.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem(_("If paused, continue counting from original start time"));
+        menuitem = new PopupMenu.PopupMenuItem(_("If paused, continue counting from original start time"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             if (this.counterStatus == "paused") {
                 this.counterStatus = "running";
@@ -209,7 +226,8 @@ MyApplet.prototype = {
 
             let menuitem = new PopupMenu.PopupMenuItem(_("Configure..."));
             menuitem.connect('activate', Lang.bind(this, function (event) {
-                GLib.spawn_command_line_async('cinnamon-settings applets ' + this.UUID);
+//              GLib.spawn_command_line_async('cinnamon-settings applets ' + this.UUID);
+                GLib.spawn_command_line_async(this.settingsCommand);
             }));
             this._applet_context_menu.addMenuItem(menuitem);
         }
@@ -349,8 +367,6 @@ MyApplet.prototype = {
     },
 
 
-
-
     // ++ This finalises the settings when the applet is removed from the panel
     on_applet_removed_from_panel: function () {
         // inhibit the update timer when applet removed from panel
@@ -364,7 +380,7 @@ function main(metadata, orientation, panelHeight, instance_id) {
     return myApplet;
 }
 /*
-Version v30_2.0.2
+Version 2.1.0
 0.9.0 Release Candidate 30-07-2013
 0.9.1 Help file facility added and link to gnome-system-monitor
 0.9.2 Change Hold to Pause in Tooltip
@@ -398,5 +414,18 @@ Version v30_2.0.2
 1.2.3 Pick up Cinnamon Version from environment variable CINNAMON_VERSION rather than settings window 
 2.0.0 Use Cinnamon version to choose text editor to start to look at changelog etc
 2.0.2 01-02-2017 Change helpfile to use README.md instead of help.txt in applet folder
-      Remove icon.png and help.txt from applet folder  
+      Remove icon.png and help.txt from applet folder
+2.0.3 Version numbering harmonised with other Cinnamon applets and added to metadata.json so it shows in 'About...'
+      icon.png copied back into applet folder so it shows in 'About...'
+2.0.4 Bug corrected at line 138 this.currentCount had comma, not stop.
+      Use of this.UUID = metadata.uuid removed (only used in Config... for Cinnamon <2.0) which makes use of UUID in l10n more obvious.
+2.0.5 Improved l10n Support:
+        UUID set from metadata.uuid so no need for explicit definition.
+        _() function now checks for system translations if a local one not found.
+        Based on ideas from @Odyseus, @lestcape and @NikoKrause
+## 2.1.0
+ * CHANGELOG.md added to applet with a symblic link from UUID - CHANGELOG.md is now displayed on Cinnamon Spices web site.
+ * CHANGELOG.md is a simplified version of the existing changelog.txt
+ * Applet updated so CHANGELOG.md is displayed from context 
+ * README.md in UUID is now symbolic link from UUID 
 */

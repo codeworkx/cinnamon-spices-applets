@@ -57,6 +57,7 @@ MyApplet.prototype = {
     this.updating = false;
     this.outdated = false;
     this.printers = [];
+    this.setIcon('printer-printing');
     this.onSettingsChanged();
   },
 
@@ -74,7 +75,7 @@ MyApplet.prototype = {
     Mainloop.timeout_add_seconds(3, Lang.bind(this, this.warningTimeout));
     this.update();
   },
-  
+
   warningTimeout: function() {
     this.printWarning = false;
     this.update();
@@ -82,11 +83,11 @@ MyApplet.prototype = {
 
   setIcon: function(iconName) {
     if (this.symbolic_icons) this.set_applet_icon_symbolic_name(iconName);
-    else this.set_applet_icon_name(iconName);  
+    else this.set_applet_icon_name(iconName);
   },
 
   onMenuToggled: function() {
-    if(!this.menu.isOpen && this.outdated) this.update();
+    if(!this.menu.isOpen && this.outdated && !this.printWarning) this.update();
   },
 
   onSettingsChanged: function() {

@@ -1,6 +1,6 @@
 const Applet = imports.ui.applet;
 const Cinnamon = imports.gi.Cinnamon;
-const GLib = imports.gi.GLib;
+const GLib = imports.gi.GLib;// ++ Needed for starting programs and translations
 const GTop = imports.gi.GTop;
 const Gio = imports.gi.Gio;
 const Lang = imports.lang;
@@ -12,7 +12,20 @@ const Main = imports.ui.main;
 const Settings = imports.ui.settings; // Needed for settings API
 const Clutter = imports.gi.Clutter; // Needed for vnstat addition
 const ModalDialog = imports.ui.modalDialog; // Needed for Modal Dialog used in Alert
-const NMClient = imports.gi.NMClient; // Needed for modifications to NM calls
+const NMClient = imports.gi.NMClient; // Needed for modifications to NM calls 
+const Gettext = imports.gettext; // ++ Needed for translations
+
+// ++ Always needed for localisation/translation support
+// l10n support thanks to ideas from @Odyseus, @lestcape and @NikoKrause
+// UUID is set in MyApplet _init: below and before function called
+
+var UUID;
+function _(str) {
+    let customTrans = Gettext.dgettext(UUID, str);
+    if (customTrans !== str && customTrans !== "")
+        return customTrans;
+    return Gettext.gettext(str);
+}
 
 // Alert response using a Modal Dialog - approach thanks to Mark Bolin 
 
@@ -31,16 +44,13 @@ AlertDialog.prototype = {
         this.contentLayout.add(label);
         this.setButtons([{
             style_class: "centered",
-            label: "Ok",
+            label: _("Ok"),
             action: Lang.bind(this, function () {
                 this.close();
             })
         }]);
     }
 }
-
-
-
 
 function MyApplet(metadata, orientation, panel_height, instance_id) {
     this._init(metadata, orientation, panel_height, instance_id);
@@ -52,7 +62,6 @@ MyApplet.prototype = {
         Applet.Applet.prototype._init.call(this, orientation, panel_height, instance_id);
         try {
 
-            this.UUID = metadata.uuid // Pick up UUID from metadata to make everything location independent
             this.settings = new Settings.AppletSettings(this, metadata.uuid, instance_id);
             this.settings.bindProperty(Settings.BindingDirection.IN,
                 "refreshInterval-spinner",
@@ -206,11 +215,15 @@ MyApplet.prototype = {
                 null);
 
             this.cssfile = metadata.path + "/stylesheet.css";
-            this.changelog = metadata.path + "/changelog.txt";
+            this.changelog = metadata.path + "/CHANGELOG.md";
             this.helpfile = metadata.path + "/README.md";
             this.crisisScript = metadata.path + "/crisisScript";
             this.appletPath = metadata.path;
-            this.UUID = metadata.uuid;
+//            this.UUID = metadata.uuid;
+            // ++ Part of l10n support;
+            UUID = metadata.uuid;
+            Gettext.bindtextdomain(metadata.uuid, GLib.get_home_dir() + "/.local/share/locale");
+
             this.applet_running = true; //** New
  
             this._client = NMClient.Client.new(); //++
@@ -285,7 +298,7 @@ MyApplet.prototype = {
             this.monitoredInterfaceName = null;
             let lastUsedInterface = this.monitoredIinterfaceBi;
 
-            this.set_applet_tooltip("No Interface being Monitored - right click to select");
+            this.set_applet_tooltip(_("No Interface being Monitored - right click to select"));
             if (this.useDefaultInterfaceIn) {
                 this.setMonitoredInterface(this.defaultInterfaceIn);
             }
@@ -294,6 +307,8 @@ MyApplet.prototype = {
             }
             this.rebuildFlag = true;
             this.firstTimeFlag  = true;
+//            this.firstTimeFlag  = false;
+
             this.on_settings_changed();
             this.update();
         } catch (e) {
@@ -394,10 +409,10 @@ MyApplet.prototype = {
             //			this.menu.addActor(this.imageWidget);      // Old way with actor added directly to menu
             try {
                 this.menu.addActor(this.mainBox); // Now add mainbox
-                this.mainBox.add_actor(this.imageWidget); // and add actor for to it which can be removed
+                this.mainBox.add_actor(this.imageWidget); // and add actor in way that it can be removed
                 this.mainBox.add_actor(this.textWidget); // and text actor to handle case where vnstat not installed
 
-                GLib.spawn_command_line_sync('vnstati -s -ne -i ' + this.monitoredInterfaceName + ' -o ' + this.vnstatImage);
+                GLib.spawn_command_line_async('vnstati -s -ne -i ' + this.monitoredInterfaceName + ' -o ' + this.vnstatImage);
                 let l = new Clutter.BinLayout();
                 let b = new Clutter.Box();
                 let c = new Clutter.Texture({
@@ -409,13 +424,18 @@ MyApplet.prototype = {
                 b.add_actor(c);
                 this.imageWidget.set_child(b);
             } catch (e) {
-                this.textWidget.set_text(" ERROR: Please make sure vnstat and vnstati are installed and that the vnstat daemon is running! ");
+                this.textWidget.set_text(_("ERROR: Please make sure vnstat and vnstati are installed and that the vnstat daemon is running!"));
                 global.logError(e);
             }
-            this.menuitemHead0 = new PopupMenu.PopupMenuItem("NOTE: The last time the network traffic statistics were updated by vnStat is at the top right", {
+            this.menuitemHead0 = new PopupMenu.PopupMenuItem(_("NOTE: The last time the network traffic statistics were updated by vnStat is at the top right"), {
                 reactive: false
             });
             this.menu.addMenuItem(this.menuitemHead0);
+            this.menuitemHead1 = new PopupMenu.PopupMenuItem("          " + _("If no Interface is Active, the last available information has been displayed"), {
+                reactive: false
+            });
+            this.menu.addMenuItem(this.menuitemHead1);
+
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
         }
 
@@ -423,7 +443,7 @@ MyApplet.prototype = {
 
         // Inhibit header if no interface monitored. NOTE Separators inhibited automatically by cinnamon 2.0
         if (this.cumulativeInterface1 != "null" && this.cumulativeInterface1 != "" || this.cumulativeInterface2 != "null" && this.cumulativeInterface2 != ""  || this.cumulativeInterface3 != "null" && this.cumulativeInterface3 != "") {
-            this.menuitemHead1 = new PopupMenu.PopupMenuItem("Cumulative Data Usage Information:", {
+            this.menuitemHead1 = new PopupMenu.PopupMenuItem(_("Cumulative Data Usage Information:"), {
             reactive: false
         });
             this.menu.addMenuItem(this.menuitemHead1);
@@ -450,7 +470,7 @@ MyApplet.prototype = {
         }
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
-        this.menuitemHead2 = new PopupMenu.PopupMenuItem("Current Connection and Interface Information", {
+        this.menuitemHead2 = new PopupMenu.PopupMenuItem(_("Current Connection and Interface Information"), {
             reactive: false
         });
         this.menu.addMenuItem(this.menuitemHead2);
@@ -460,16 +480,16 @@ MyApplet.prototype = {
                 reactive: false
             });
             this.menu.addMenuItem(this.menuitemInfo);
-            this.menuitemInfo.label.text = "    " + this.monitoredInterfaceName + " - Downloaded: " + this.formatSentReceived(this.downOld) + " - Uploaded: " + this.formatSentReceived(this.upOld);
+            this.menuitemInfo.label.text = "    " + this.monitoredInterfaceName + " " + "- Downloaded:" + " " + this.formatSentReceived(this.downOld) + " " + "- Uploaded:" + " " + this.formatSentReceived(this.upOld);
         } else {
-            this.menuitemInfo = new PopupMenu.PopupMenuItem("No network monitored. Please select one right-clicking the applet.", {
+            this.menuitemInfo = new PopupMenu.PopupMenuItem(_("No network monitored. Please select one right-clicking the applet."), {
                 reactive: false
             });
             this.menu.addMenuItem(this.menuitemInfo);
         }
         //	Slider only if Alerts enabled
         if (this.useTotalLimit) {
-            this.menuitemInfo2 = new PopupMenu.PopupMenuItem("     Note: Alerts not enabled in Settings", {
+            this.menuitemInfo2 = new PopupMenu.PopupMenuItem("     " + _("Note: Alerts not enabled in Settings"), {
                 reactive: false
             });
             this.menu.addMenuItem(this.menuitemInfo2);
@@ -485,38 +505,51 @@ MyApplet.prototype = {
     updateLeftMenu: function () {
 
         if (this.useTotalLimit) {
-            this.menuitemInfo2.label.text = "    " + "Alert level (Orange): " + Math.round(this.alertPercentage) + " % of Data Limit of " + this.formatSentReceived((this.totalLimit* 1024 * 1024 )) ;
+            this.menuitemInfo2.label.text = "    " + _("Alert level (Orange):") + " " + Math.round(this.alertPercentage) + _("% of Data Limit of") + " " + this.formatSentReceived((this.totalLimit* 1024 * 1024 )) ;
         }
 
         if (this.cumulativeInterface1 != "null" && this.cumulativeInterface1 != "") {
             if (this.cumulativeOffset1 != 0) {
-                this.menuitemInfo1.label.text = "   " + this.cumulativeInterface1 + " - Cumulative Data Use " + this.cumulativeComment1 + " with offset of " + this.formatSentReceived((this.cumulativeOffset1) * 1024 * 1024) + " = " + this.formatSentReceived((this.cumulativeTotal1  - this.cumulativeOffset1) * 1024 * 1024);
+                this.menuitemInfo1.label.text = "   " + this.cumulativeInterface1 + " - " + _("Cumulative Data Use")  + " " + this.cumulativeComment1 + " " + _("with offset of") + " " + this.formatSentReceived((this.cumulativeOffset1) * 1024 * 1024) + " = " + this.formatSentReceived((this.cumulativeTotal1  - this.cumulativeOffset1) * 1024 * 1024);
             } else {
-                this.menuitemInfo1.label.text = "   " + this.cumulativeInterface1 + " - Cumulative Data Use " + this.cumulativeComment1 + " = " + this.formatSentReceived(this.cumulativeTotal1 * 1024 * 1024);
+                this.menuitemInfo1.label.text = "   " + this.cumulativeInterface1 + " - " + _("Cumulative Data Use") + " " + this.cumulativeComment1 + " = " + this.formatSentReceived(this.cumulativeTotal1 * 1024 * 1024);
             }
         } 
 
         if (this.cumulativeInterface2 != "null" && this.cumulativeInterface2 != "") {
             if (this.cumulativeOffset2 != 0) {
-                this.menuitemInfo4.label.text = "   " + this.cumulativeInterface2 + " - Cumulative Data Use " + this.cumulativeComment2+ " with offset of " + this.formatSentReceived((this.cumulativeOffset2) * 1024 * 1024 ) + " = " + this.formatSentReceived((this.cumulativeTotal2  - this.cumulativeOffset2) * 1024 * 1024);
+                this.menuitemInfo4.label.text = "   " + this.cumulativeInterface2 + " - " + _("Cumulative Data Use") + " " + this.cumulativeComment2 + " " + _("with offset of") + " " + this.formatSentReceived((this.cumulativeOffset2) * 1024 * 1024 ) + " = " + this.formatSentReceived((this.cumulativeTotal2  - this.cumulativeOffset2) * 1024 * 1024);
             } else {
-                this.menuitemInfo4.label.text = "   " + this.cumulativeInterface2 + " - Cumulative Data Use " + this.cumulativeComment2 + " = " + this.formatSentReceived(this.cumulativeTotal2 * 1024 * 1024);
+                this.menuitemInfo4.label.text = "   " + this.cumulativeInterface2 + " - " + _("Cumulative Data Use") + " " + this.cumulativeComment2 + " = " + this.formatSentReceived(this.cumulativeTotal2 * 1024 * 1024);
             }
         } 
 
         if (this.cumulativeInterface3 != "null" && this.cumulativeInterface3 != "") {
             if (this.cumulativeOffset3 != 0) {
-               this.menuitemInfo6.label.text = "   " + this.cumulativeInterface3 + " - Cumulative Data Use " + this.cumulativeComment3 + " with offset of " + this.formatSentReceived((this.cumulativeOffset3) * 1024 * 1024 ) + " = " + this.formatSentReceived((this.cumulativeTotal3  - this.cumulativeOffset3) * 1024 * 1024);
+               this.menuitemInfo6.label.text = "   " + this.cumulativeInterface3 + " - " + _("Cumulative Data Use") + " " + this.cumulativeComment3 + " " + _("with offset of") + " " + this.formatSentReceived((this.cumulativeOffset3) * 1024 * 1024 ) + " = " + this.formatSentReceived((this.cumulativeTotal3  - this.cumulativeOffset3) * 1024 * 1024);
             } else {
-                this.menuitemInfo6.label.text = "   " + this.cumulativeInterface3 + " - Cumulative Data Use " + this.cumulativeComment3 + " = " + this.formatSentReceived(this.cumulativeTotal3 * 1024 * 1024 );
+               this.menuitemInfo6.label.text = "   " + this.cumulativeInterface3 + " - " + "Cumulative Data Use " + this.cumulativeComment3 + " = " + this.formatSentReceived(this.cumulativeTotal3 * 1024 * 1024 );
             }
         } 
     },
 
     // Build right click context menu
     buildContextMenu: function () {
-        this._applet_context_menu.removeAll();
-        this._applet_context_menu.addMenuItem(new PopupMenu.PopupMenuItem("Select a network manager interface to be monitored:", {
+
+/*
+The code following allows me to retain the 'standard' additions of 'About...' 'Configure...' and 'Remove' when rebuilding the Context menu.
+The use of a PopupMenu.PopupMenuSection was suggested @collinss with implementation provided by @Odyseus in a way that allowed me to keep your code almost exactly as it was with a minimum number of tweaks. 
+Note Odysius has used the index 0 (zero) to insert the menu section to position items in the correct order and avoid the menu section being added after all the default items.
+*/
+
+        if (this.myMenuSection)
+            this.myMenuSection.destroy();
+        this.myMenuSection = new PopupMenu.PopupMenuSection();
+        this._applet_context_menu.addMenuItem(this.myMenuSection, 0);
+
+// Old code continues
+
+        this.myMenuSection.addMenuItem(new PopupMenu.PopupMenuItem(_("Select a network manager interface to be monitored:"), {
             reactive: false
         }));
 
@@ -529,7 +562,7 @@ MyApplet.prototype = {
                     if (this.monitoredInterfaceName != name && this.monitoredInterfaceName != "ppp0"  && this.monitoredInterfaceName != "bnep0" && !this.useDefaultInterfaceIn) {
                           this.setMonitoredInterface(name);
                     }
-                    displayname = displayname + " (Active)";
+                    displayname = displayname + " " + _("(Active)");
                 }
                 if (this.monitoredInterfaceName == name) {
                     displayname = "\u2714" + displayname;
@@ -538,15 +571,15 @@ MyApplet.prototype = {
                 menuitem.connect('activate', Lang.bind(this, function () {
                     this.setMonitoredInterface(name);
                 }));
-                this._applet_context_menu.addMenuItem(menuitem);
+                this.myMenuSection.addMenuItem(menuitem);
+//                this._applet_context_menu.addMenuItem(menuitem);
             }
-        }
-
-        this._applet_context_menu.addMenuItem(new PopupMenu.PopupMenuItem("or Select an independent interface to be monitored:", {
+        } 
+        this.myMenuSection.addMenuItem(new PopupMenu.PopupMenuItem(_("or Select an independent interface to be monitored:"), {
             reactive: false
         }));
 
-        let displayname2 = "\t" + "ppp0   (for most USB Mobile Internet Modems)";
+       let displayname2 = "\t" + "ppp0   (" + _("for most USB Mobile Internet Modems)");
         if (this.monitoredInterfaceName == "ppp0") {
             displayname2 = "\u2714" + displayname2;
         }
@@ -554,29 +587,29 @@ MyApplet.prototype = {
         menuitem.connect('activate', Lang.bind(this, function () {
             this.setMonitoredInterface("ppp0");
         }));
-        this._applet_context_menu.addMenuItem(menuitem)
+        this.myMenuSection.addMenuItem(menuitem)
 
         // New Code to handle Android Bluetooth conections which use bnep0
 
-        let displayname3 = "\t" + "bnep0  (Android Bluetooth PAN Connections)";
+        let displayname3 = "\t" + "bnep0  (" + _("for Android Bluetooth PAN Connections)");
         if (this.monitoredInterfaceName == "bnep0") {
             displayname3 = "\u2714" + displayname3;
         }
-        let menuitem = new PopupMenu.PopupMenuItem(displayname3);
+        menuitem = new PopupMenu.PopupMenuItem(displayname3);
         menuitem.connect('activate', Lang.bind(this, function () {
             this.setMonitoredInterface("bnep0");
         }));
-        this._applet_context_menu.addMenuItem(menuitem)
+        this.myMenuSection.addMenuItem(menuitem)
 
-        let menuitem = new PopupMenu.PopupMenuItem("Check for Changes in Devices and Display Options");
+        menuitem = new PopupMenu.PopupMenuItem(_("Check for Changes in Devices and Display Options"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             this.rebuildFlag = true;
         }));
-        this._applet_context_menu.addMenuItem(menuitem);
+        this.myMenuSection.addMenuItem(menuitem);
 
-        this._applet_context_menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.myMenuSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        let menuitem = new PopupMenu.PopupMenuItem("Toggle Display from \u2193 and \u2191 to \u21f5");
+        menuitem = new PopupMenu.PopupMenuItem(_("Toggle Display from \u2193 and \u2191 to \u21f5"));
         menuitem.connect('activate', Lang.bind(this, function (event) {
             if (this.compactDisplay) {
                 this.compactDisplay = false;
@@ -586,11 +619,11 @@ MyApplet.prototype = {
                 this.appletWidth = (this.appletWidthSetting / 2) + 11;
             }
         }));
-        this._applet_context_menu.addMenuItem(menuitem);
+        this.myMenuSection.addMenuItem(menuitem);
 
         // Code to reset Cumulative Data Usage and set their comments to the current date and time
 
-        let menuitem = new PopupMenu.PopupMenuItem("Reset Cumulative Data Usage 1 (" + this.cumulativeInterface1 + ")");
+        menuitem = new PopupMenu.PopupMenuItem(_("Reset Cumulative Data Usage") + " 1 (" + this.cumulativeInterface1 + ")");
         menuitem.connect('activate', Lang.bind(this, function (event) {
         let d = new Date();
         this.cT1 = 0;
@@ -598,9 +631,9 @@ MyApplet.prototype = {
         this.cumulativeComment1 = "from " + d.toLocaleString();
         this.cumulativeOffset1 = 0;
         }));
-        this._applet_context_menu.addMenuItem(menuitem);
+        this.myMenuSection.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem("Reset Cumulative Data Usage 2 (" + this.cumulativeInterface2 + ")");
+        menuitem = new PopupMenu.PopupMenuItem(_("Reset Cumulative Data Usage") + " 2 (" + this.cumulativeInterface2 + ")");
         menuitem.connect('activate', Lang.bind(this, function (event) {
         let d = new Date();
         this.cT2 = 0;
@@ -608,9 +641,9 @@ MyApplet.prototype = {
         this.cumulativeComment2 = "from " + d.toLocaleString();
         this.cumulativeOffset2 = 0;
         }));
-        this._applet_context_menu.addMenuItem(menuitem);
+        this.myMenuSection.addMenuItem(menuitem);
 
-        let menuitem = new PopupMenu.PopupMenuItem("Reset Cumulative Data Usage 3 (" + this.cumulativeInterface3 + ")");
+        menuitem = new PopupMenu.PopupMenuItem(_("Reset Cumulative Data Usage") + " 3 (" + this.cumulativeInterface3 + ")");
         menuitem.connect('activate', Lang.bind(this, function (event) {
         let d = new Date();
         this.cT3 = 0;
@@ -618,48 +651,48 @@ MyApplet.prototype = {
         this.cumulativeComment3 = "from " + d.toLocaleString();
         this.cumulativeOffset3 = 0;
         }));
-        this._applet_context_menu.addMenuItem(menuitem);
+        this.myMenuSection.addMenuItem(menuitem);
 
-        this._applet_context_menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.myMenuSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         // Set up sub menu for Housekeeping and System Items
-        this.subMenu1 = new PopupMenu.PopupSubMenuMenuItem("Housekeeping and System Sub Menu");
-        this._applet_context_menu.addMenuItem(this.subMenu1);
+        this.subMenu1 = new PopupMenu.PopupSubMenuMenuItem(_("Housekeeping and System Sub Menu"));
+        this.myMenuSection.addMenuItem(this.subMenu1);
 
-        this.subMenuItem1 = new PopupMenu.PopupMenuItem("Open System Monitor");
+        this.subMenuItem1 = new PopupMenu.PopupMenuItem(_("Open System Monitor"));
         this.subMenuItem1.connect('activate', Lang.bind(this, function (event) {
             GLib.spawn_command_line_async('gnome-system-monitor');
         }));
         this.subMenu1.menu.addMenuItem(this.subMenuItem1); // Note this has subMenu1.menu not subMenu1._applet_context_menu
 
-        this.subMenuItem2 = new PopupMenu.PopupMenuItem("View the Changelog");
+        this.subMenuItem2 = new PopupMenu.PopupMenuItem(_("View the Changelog"));
         this.subMenuItem2.connect('activate', Lang.bind(this, function (event) {
            GLib.spawn_command_line_async(this.textEd + ' ' + this.changelog);
         }));
         this.subMenu1.menu.addMenuItem(this.subMenuItem2);
- 
-      this.subMenuItem3 = new PopupMenu.PopupMenuItem("View the Help File");
+
+      this.subMenuItem3 = new PopupMenu.PopupMenuItem(_("View the Help File"));
         this.subMenuItem3.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async(this.textEd + ' ' + this.helpfile);
         }));
         this.subMenu1.menu.addMenuItem(this.subMenuItem3);
 
         this.subMenu1.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
+ 
         if (this.displayExtraHousekeeping) {
-            this.subMenuItem4 = new PopupMenu.PopupMenuItem("Open stylesheet.css  (Advanced Function)");
+            this.subMenuItem4 = new PopupMenu.PopupMenuItem(_("Open stylesheet.css  (Advanced Function)"));
             this.subMenuItem4.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async(this.textEd + ' ' + this.cssfile);
             }));
             this.subMenu1.menu.addMenuItem(this.subMenuItem4);
 
-            this.subMenuItem8 = new PopupMenu.PopupMenuItem("Open alertScript  (Advanced Function)");
+            this.subMenuItem8 = new PopupMenu.PopupMenuItem(_("Open alertScript  (Advanced Function)"));
             this.subMenuItem8.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async(this.textEd + ' ' + this.appletPath + '/alertScript');
             }));
             this.subMenu1.menu.addMenuItem(this.subMenuItem8);
 
-            this.subMenuItem5 = new PopupMenu.PopupMenuItem("Open suspendScript  (Advanced Function)");
+            this.subMenuItem5 = new PopupMenu.PopupMenuItem(_("Open suspendScript  (Advanced Function)"));
             this.subMenuItem5.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async(this.textEd + ' ' + this.appletPath + '/suspendScript');
             }));
@@ -667,31 +700,24 @@ MyApplet.prototype = {
 
             this.subMenu1.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-            this.subMenuItem9 = new PopupMenu.PopupMenuItem("Test alertScript  (Advanced Test Function)");
+            this.subMenuItem9 = new PopupMenu.PopupMenuItem(_("Test alertScript  (Advanced Test Function)"));
             this.subMenuItem9.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async('sh ' + this.appletPath + '/alertScript');
             }));
             this.subMenu1.menu.addMenuItem(this.subMenuItem9);
 
-            this.subMenuItem6 = new PopupMenu.PopupMenuItem("Test suspendScript  (Advanced Test Function)");
+            this.subMenuItem6 = new PopupMenu.PopupMenuItem(_("Test suspendScript  (Advanced Test Function)"));
             this.subMenuItem6.connect('activate', Lang.bind(this, function (event) {
                 GLib.spawn_command_line_async('sh ' + this.appletPath + '/suspendScript');
             }));
             this.subMenu1.menu.addMenuItem(this.subMenuItem6);
 
-            this.subMenuItem7 = new PopupMenu.PopupMenuItem("Test Crisis Management Function (Advanced Test Function)");
+            this.subMenuItem7 = new PopupMenu.PopupMenuItem(_("Test Crisis Management Function (Advanced Test Function)"));
             this.subMenuItem7.connect('activate', Lang.bind(this, function (event) {
                 this.crisis();
             }));
             this.subMenu1.menu.addMenuItem(this.subMenuItem7);
          }
-
-        this._applet_context_menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        let menuitem = new PopupMenu.PopupMenuItem("Configure");
-        menuitem.connect('activate', Lang.bind(this, function (event) {
-            GLib.spawn_command_line_async('cinnamon-settings applets ' + this.UUID);
-        }));
-        this._applet_context_menu.addMenuItem(menuitem);
     },
 
     setMonitoredInterface: function (name) {
@@ -701,7 +727,7 @@ MyApplet.prototype = {
         GTop.glibtop_get_netload(this.gtop, this.monitoredInterfaceName);
         this.upOld = this.gtop.bytes_out;
         this.downOld = this.gtop.bytes_in;
-        // Also set up the working values of the Cummulative totals.
+        // Also set up the working values of the Cumulative totals.
 	this.cT1 = this.cumulativeTotal1;
 	this.cT2 = this.cumulativeTotal2;
 	this.cT3 = this.cumulativeTotal3;
@@ -724,12 +750,11 @@ MyApplet.prototype = {
     playAlert: function(){
         if(this.useAlertSound) {
             GLib.spawn_command_line_async('play ' + this.alertSound);
-//            GLib.spawn_command_line_async('play /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga');
         }
     },
 
      delayedNetworkingDisable: function (delay) {
-            GLib.spawn_command_line_async('zenity --warning --text="THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\nAll network connections Managed by the Network Manager will be Disabled\nin '+delay+' seconds\n\nYou can click The Applet (NOT this OK button) to abort disabling the network" --timeout='+delay);
+            GLib.spawn_command_line_async('zenity --warning --text="THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\nAll network connections Managed by the Network Manager will be Disabled shortly\n\nYou can click The Applet (NOT this OK button) to abort disabling the network" --timeout='+ delay);
             this.playAlert();
             this.abortFlag = false;
             Mainloop.timeout_add_seconds(delay, Lang.bind(this, this.networkingDisable));
@@ -739,10 +764,10 @@ MyApplet.prototype = {
      networkingDisable: function () {
           if(!this.abortFlag) {
                this._client.networking_enabled = false; // Call to NMClient
-               alertModalNetworkingDisabled = new AlertDialog("THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\nAll Network connections managed by the Network Manager have been Disabled \n\nYou will need to use the Network Manager Applet to Re-enable them\nwhen the data usage problem has been resolved \n\n Some connections using ppp0 may not have been disabled\nor may need to be restarted manually");
+               alertModalNetworkingDisabled = new AlertDialog_(("THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\nAll Network connections managed by the Network Manager have been Disabled\n\nYou will need to use the Network Manager Applet to Re-enable them\nwhen the data usage problem has been resolved\n\n Some connections using ppp0 may not have been disabled or may need to be restarted manually"));
               alertModalNetworkingDisabled.open();
           } else {
-                GLib.spawn_command_line_async('zenity --info --text="You have aborted network disconnection despite the data usage limit being exceeded" --timeout=30');    
+                GLib.spawn_command_line_async('zenity --info --text=_("You have aborted network disconnection despite the data usage limit being exceeded") --timeout=30');    
           }
       },
 
@@ -753,10 +778,10 @@ MyApplet.prototype = {
         if (this.crisisManagement == "notify") {
             // built in notify does not seem to work so use command line call
             // this.notify("The Limit has been exceeded", "Reset or turn off networking");
-            GLib.spawn_command_line_async('notify-send "Current Network Usage Limit Exceeded" "You need to change the Data Limit for the current connection\n    Right Click -> Settings and adjust the Spin Wheel \n\n or disconnect using the Network Manager Applet" --urgency=critical');
+            GLib.spawn_command_line_async('notify-send _("Current Network Usage Limit Exceeded" "You need to change the Data Limit for the current connection\n    Right Click -> Settings and adjust the Spin Wheel \n\n or disconnect using the Network Manager Applet") --urgency=critical');
 
         } else if (this.crisisManagement == "alertmodal") {
-            alertModalDataWarning = new AlertDialog("THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\n Either set a new limit using right click -> Settings \n\nor disconnect using the Network Manager Applet");
+            alertModalDataWarning = new AlertDialog(_("THE DATA USAGE LIMIT HAS BEEN EXCEEDED\n\n Either set a new limit using right click -> Settings \n\nor disconnect using the Network Manager Applet"));
             alertModalDataWarning.open();
 
         } else if (this.crisisManagement == "alertscript") {
@@ -769,7 +794,7 @@ MyApplet.prototype = {
               this.delayedNetworkingDisable(this.disconnectDelay);
 
         } else {
-            GLib.spawn_command_line_async('notify-send "Current Network Usage Limit exceeded"  "You need to change the Data Limit for the current connection\n    Right Click -> Settings and adjust the Spin Wheel \n\n or disconnect using the Network Manager Applet" ');
+            GLib.spawn_command_line_async('notify-send _("Current Network Usage Limit exceeded"  "You need to change the Data Limit for the current connection\n    Right Click -> Settings and adjust the Spin Wheel \n\n or disconnect using the Network Manager Applet") ');
         }
     },
 
@@ -828,19 +853,20 @@ MyApplet.prototype = {
 
         // Now set up tooltip every cycle
         if (this.monitoredInterfaceName != null) {
-            this.set_applet_tooltip("Interface: " + this.monitoredInterfaceName + " - Downloaded: " + this.formatSentReceived(this.downOld) + " - Uploaded: " + this.formatSentReceived(this.upOld));
+            this.set_applet_tooltip(_("Interface:") + " " + this.monitoredInterfaceName + " - " + _("Downloaded:") + " " + this.formatSentReceived(this.downOld) + " - " + _("Uploaded:")  + " " + this.formatSentReceived(this.upOld));
         }
         // Update selected items in left click menu every cycle
-        this.menuitemInfo.label.text = "    " + this.monitoredInterfaceName + " - Downloaded: " + this.formatSentReceived(this.downOld) + " - Uploaded: " + this.formatSentReceived(this.upOld);
+        this.menuitemInfo.label.text = "    " + this.monitoredInterfaceName + " - " + _("Downloaded:") + " " + this.formatSentReceived(this.downOld) + " - " + _("Uploaded:") + " " + this.formatSentReceived(this.upOld);
 
         //  rebuild Right Click menu but only when required and after changes flagged as it is a slow activity
         if (this.rebuildFlag) {
             this.rebuildFlag = false;
             this.buildContextMenu();
         }
-        // Fix for Cinnamon 2.0 to remove Context Menu Items by running build context menu again next loop - note delay needed
+        // Fix for Cinnamon 2.0 to remove Context Menu Items by running build context menu again next loop - note delay needed 
+        // No longer required thanks to alternative solution thanks to @Odyseus
         if (this.firstTimeFlag) {
-            this.rebuildFlag = true;
+           this.rebuildFlag = true;
             this.firstTimeFlag = false;
         }
 
@@ -949,7 +975,7 @@ function main(metadata, orientation, panel_height, instance_id) {
 }
 
 /*
-Version v30_3.0.7
+Version 3.2.1
 1.0 Applet Settings now used for Update Rate, Resolution and Interface. 
     Built in function used for left click menu. 
 1.1 Right click menu item added to open Settings Screen. 
@@ -988,7 +1014,7 @@ Version v30_3.0.7
 2.2.3 Addition documentation
 2.2.4 Changed 'crisis' to 'suspend' for preset script and tested. Reorder advanced functions and added separators.
 2.2.5 Three special cases now in use - suspendscript, alertscript and modalalert. Function added to implement the modal dialog used by modal alert. Testing functions still 'exposed' to users on right click function submenu. 
-To think about - do we need the ability to have a terminal command option as any terminal command can be put into the alertScript file, in fact it can be a series of commands run asyncronously by ending them with a $ so a sound file could be played and a notification put up using zenity at the same time. This is a safer way ahead whilst leaving a huge flexibility for customisation. Should a different selection mechanism be used? 
+To think about - do we need the ability to have a terminal command option as any terminal command can be put into the alertScript file, in fact it can be a series of commands run asynchronously by ending them with a $ so a sound file could be played and a notification put up using zenity at the same time. This is a safer way ahead whilst leaving a huge flexibility for customisation. Should a different selection mechanism be used? 
 Conclusion - change to a drop down selection of options, initially the three currently in use but consider adding sound and notification options. remove terminal string option as it can be in a script file.
 2.2.6 Implemented drop down alert handling plus change back to KB from kB and replace round with floor
 2.2.7 Scripts commented and checked. Extra options of notify and do nothing added. Use now made of Sox to play audio warnings and notify-send to add notifications. sox needs to be installed
@@ -1005,7 +1031,7 @@ Conclusion - change to a drop down selection of options, initially the three cur
 2.3.5 Major change in use of css styles for the background colours which show connection and alert status.
       This allows the user to match colours etc to a particular theme.
 2.3.6 Minor bug fix - Context Menu not always rebuilt after adding or removing advanced functions submenu.
-2.3.7 Bug fix - Cummulative counters 1 and 3 not being saved correctly
+2.3.7 Bug fix - Cumulative counters 1 and 3 not being saved correctly
 2.3.8  Anomoly fix - Avoid calling  GTop.glibtop_get_netload() without valid interface -
        possible latest versions can segfault if interface not valid.
 2.3.9  Add fix for Applet not being fully halted when removed from panel (from dansie)
@@ -1013,12 +1039,12 @@ Conclusion - change to a drop down selection of options, initially the three cur
        automatically added items from the context menu by calling rebuilding menu a second 
        time during startup sequence after a one cycle delay. Long term solution is to use 
        dansie's method of building everything as a submenu. 
-2.3.11 Default settings changed to start with cummulative monitoring off for all interfaces
+2.3.11 Default settings changed to start with cumulative monitoring off for all interfaces
        (null) in settings file.
 2.3.12 Revert to the old method of handling cumulative data and only update cumulative totals
        for the monitored interface. Slightly less flexible but intended to reduce the chances
        of segfaults until the problem is understood and resolved.
-2.3.13 Changes to Settings File to explicitely use real numbers for Cumulative Data
+2.3.13 Changes to Settings File to explicitly use real numbers for Cumulative Data
 2.3.14 Test of reset function including setting reset date and time 
        and avoid use of updating a Cinnamon Settings within a single expression
        NB Interface 1 only 
@@ -1042,7 +1068,7 @@ Conclusion - change to a drop down selection of options, initially the three cur
 2.4.1  Moved Configure to bottom of context menu
        Tried multiple instances - useful but automatic update fails and hand crafting of .cinnamon/configs/netusagemonitor@pdcurtis required
        Checked with Cinnamon 2.2 via LiveUSB
-2.4.2  Display of Header inhibited when no Cummulative Data being displayed.
+2.4.2  Display of Header inhibited when no Cumulative Data being displayed.
 2.4.3.0   Multiple instances in metadata.json
           Changes to minimise width of applet when not connected to go with multiple instances.     
           Change to width in stylesheet.css to match
@@ -1071,18 +1097,47 @@ Conclusion - change to a drop down selection of options, initially the three cur
           Required because selecting the active bluetooth connection which looks like 12:34:56:78:90:12
           in the network manager does not work
           It ought to be possible to use bnep0 whenever the active interface contains semicolons
-          but if it aint broke dont fix it!
+          but if it aint broke don't fix it!
           Corrected formatSentReceiver to handle negative numbers resulting from offsets 
 3.0.0     Modifications for Mint 18 and higher with Cinnamon 3.0 and higher
           Changes to Suspend Script to work with SystemD as well as Dbus for suspend and changes to allow immediate suspend option in box.
           Addition of version test to chose between xed for Mint 18 with Cinnamon 3.0 and gedit for earlier versions. 
 3.0.2     NOTE 3.0.1 was not a separate version - it was a mechanism to overwrite a faulty zip upload of 3.0.0 to the cinnamon-spices web site
 3.0.3     Corrected icon.png in applet folder which is used by Add Applets and removed incorrect icon from metadata.json
-3.0.4     Increased maximum from 5000 mbytes to 100000 mbytes for totalLimit and cummulative offsets
+3.0.4     Increased maximum from 5000 mbytes to 100000 mbytes for totalLimit and cumulative offsets
 3.0.5     Made much more use of formatSentReceived() because of increase in limits
           Removed a number of commented out blocks to do with cumulative totals and formatting.
 3.0.6     Choice of units for limits and offsets to be Mbytes or Gbytes by drop down widget in settings (configuration) window
           Maximum Limits and Offsets set to 200000 Mbytes/Gbytes as appropriate
-3.0.7     Change from call to firefox to opening README.md to on Context submenu.
-          Delete helpfile.txt from applet folder and Update changelog
+
+Transition to new cinnamon-spices-applets repository from github.com/pdcurtis/cinnamon-applets
+
+3.0.7     Change from call to firefox to opening README.md on Context submenu.
+          Delete helpfile.txt from applet folder and update changelog.txt
+3.1.0     Version numbering harmonised with other Cinnamon applets and added to metadata.json so it can show in 'About...'
+          icon.png copied back into applet folder so it can show in 'About...'
+          Add translation support to applet.js
+          Identify strings for translation and remove leading and trailing spaces and replace with separate spaces where required.
+          Add po folder to applet
+          Create netusagemonitor.pot using cinnamon-json-makepot --js po/netusagemonitor.pot
+          Version and changes information update in applet.js and changelog.txt
+          Update README.md (2x) for contributions.
+3.1.1     Additional PopupMenu.PopupMenuSection added as per an easy and elegant suggestion from @collinss and @Odyseus so 'standard' context menu items are retained when the menu is refreshed.
+          Update netusagemonitor.pot using cinnamon-json-makepot --js po/netusagemonitor.pot
+          Version and changes information update in applet.js and changelog.txt
+          Update README.md (2x) for contributions from @collinss and @Odyseus.
+3.1.2     Change spawn_command_line_sync to spawn_command_line_async to remove one reason for 'dangerous' classification.
+          Correct several spelling errors in comments and .md files.
+3.2.0     Remove duplicate let declarations occurances in common coding for Cinnamon 3.4 thanks to @NikoKraus  [#604]
+3.2.1     Harmonise with code writen by author for vnstat@cinnamon.org and revert 3.1.2 until further testing.
+          Updated netusagemonitor.pot using cinnamon-json-makepot --js po/netusagemonitor.pot as string added. 
+          Tidy up comments in applet.js
+          Update README.md to remove a couple of references to Ubuntu from early days.
+          Usual updates to new version in applet.js, changelog and metadata.json
+3.2.2     Removed unused this.UUID = metadata.uuid 
+          Improved l10n translation support.
+          Added CHANGELOG.md to applet folder and use it instead of changelog.txt in right click menu
+          CHANGELOG.md based on recent entries to changelog.txt with last changes at the top. changelog.txt currently remains in applet folder but is not used.
+          Use symbolic links for README.md and CHANGELOG.md instead of copies from the applet folder to UUID folder for the Cinnamon Web Site to pick up
+          
 */

@@ -3,6 +3,7 @@ const Gtk = imports.gi.Gtk;
 const GLib = imports.gi.GLib;
 const CMenu = imports.gi.CMenu;
 const Clutter = imports.gi.Clutter;
+const Cinnamon = imports.gi.Cinnamon;
 const St = imports.gi.St;
 const Util = imports.misc.util;
 const Main = imports.ui.main;
@@ -10,7 +11,7 @@ const Mainloop = imports.mainloop;
 const Lang = imports.lang;
 const GnomeSession = imports.misc.gnomeSession;
 const ScreenSaver = imports.misc.screenSaver;
-const PanelMenu = imports.ui.panelMenu;
+const Signals = imports.signals;
 const PopupMenu = imports.ui.popupMenu;
 
 const AppletDir = imports.ui.appletManager.applets['Cinnamenu@json'];
@@ -29,14 +30,14 @@ const Fuse = AppletDir.fuse.Fuse;
 
 // l10n
 const Gettext = imports.gettext;
-const UUID = "Cinnamenu@json";
+const UUID = 'Cinnamenu@json';
 
 function _(str) {
-    let cinnamonTranslation = Gettext.gettext(str);
-    if(cinnamonTranslation != str) {
-        return cinnamonTranslation;
-    }
-    return Gettext.dgettext(UUID, str);
+  let cinnamonTranslation = Gettext.gettext(str);
+  if (cinnamonTranslation !== str) {
+    return cinnamonTranslation;
+  }
+  return Gettext.dgettext(UUID, str);
 }
 
 const REMEMBER_RECENT_KEY = 'remember-recent-files';
@@ -63,12 +64,13 @@ function CinnamenuPanel() {
 }
 
 CinnamenuPanel.prototype = {
-  __proto__: PanelMenu.Button.prototype,
 
   _init: function(applet) {
     this.launcher = {};
-    PanelMenu.Button.prototype._init.call(this, applet.orientation)
 
+    this.actor = new Cinnamon.GenericContainer({
+      style_class: 'panel-button'
+    });
     this._applet = applet;
     this.orientation = applet.orientation;
     this.menu = applet.menu
@@ -76,7 +78,7 @@ CinnamenuPanel.prototype = {
     this.actor.add_style_class_name('panel-status-button');
 
     let manager;
-    if (this.orientation == St.Side.TOP || this.orientation == St.Side.BOTTOM) {
+    if (this.orientation === St.Side.TOP || this.orientation === St.Side.BOTTOM) {
       manager = new Clutter.BoxLayout({
         orientation: Clutter.Orientation.HORIZONTAL
       });
@@ -132,6 +134,7 @@ CinnamenuPanel.prototype = {
     this.recentManager = Gtk.RecentManager.get_default();
     this.placesManager = null;
     this._displayed = false;
+    this.menuHeight = 530;
   },
 
   on_panel_edit_mode_changed: function() {
@@ -150,7 +153,7 @@ CinnamenuPanel.prototype = {
       padding: mainBoxThemeNode.get_padding(St.Side.TOP),
     };
     if (typeof cb === 'function') {
-      Mainloop.idle_add(cb);
+      Mainloop.idle_add_full(Mainloop.PRIORITY_DEFAULT, cb);
     }
   },
 
@@ -167,9 +170,7 @@ CinnamenuPanel.prototype = {
       }
       this.introspectTheme(()=>{
         // Set focus to search entry
-        global.stage.set_key_focus(this.searchEntry);
-
-        this._menuToggleTimeoutId = Mainloop.timeout_add(100, Lang.bind(this, this.resetSearchWithFocus));
+        this.resetSearchWithFocus();
 
         // Load Startup Applications category
         this._selectedItemIndex = null;
@@ -194,8 +195,8 @@ CinnamenuPanel.prototype = {
         this.categoriesBox.width = this.groupCategoriesWorkspacesScrollBox.width;
         this._widthCategoriesBox = this.groupCategoriesWorkspacesScrollBox.width;
 
-        // calculate applications list/grid box width
-        this._calculateApplicationsBoxWidth(this._applicationsViewMode === ApplicationsViewMode.LIST);
+        // calculate applications list/grid box width // TBD
+        //this._calculateApplicationsBoxWidth(this._applicationsViewMode === ApplicationsViewMode.LIST);
 
         // Hide applications list/grid box depending on view mode
         if (this._applicationsViewMode === ApplicationsViewMode.LIST) {
@@ -214,6 +215,7 @@ CinnamenuPanel.prototype = {
         // ISSUE: If height isn't set, then popup menu height will expand when application buttons are added
         let height = this.groupCategoriesWorkspacesScrollBox.height;
         this.applicationsScrollBox.height = height;
+        this.mainBox.show();
       });
     } else {
       this.resetSearch();
@@ -246,8 +248,8 @@ CinnamenuPanel.prototype = {
     var rootDir = root;
     var iter = dir.iter();
     var nextType;
-    while ((nextType = iter.next()) != CMenu.TreeItemType.INVALID) {
-      if (nextType == CMenu.TreeItemType.ENTRY) {
+    while ((nextType = iter.next()) !== CMenu.TreeItemType.INVALID) {
+      if (nextType === CMenu.TreeItemType.ENTRY) {
         var entry = iter.get_entry();
         if (!entry.get_app_info().get_nodisplay()) {
           var app = this._applet.appSystem.lookup_app(entry.get_desktop_file_id());
@@ -263,7 +265,7 @@ CinnamenuPanel.prototype = {
             }
           }
         }
-      } else if (nextType == CMenu.TreeItemType.DIRECTORY) {
+      } else if (nextType === CMenu.TreeItemType.DIRECTORY) {
         if (rootDir) {
           this._loadCategories(iter.get_directory(), rootDir);
         } else {
@@ -289,10 +291,16 @@ CinnamenuPanel.prototype = {
     // not showing the app list.
 
     this._currentSelectKey = '_selectCategory';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
   _selectFavorites: function(button, refresh) {
+    if (!button) {
+      button = this._previousCategoryButton;
+    }
     if (button._dir === 'favorites') {
       this._selectCategory(this.favAppCategory);
     }
@@ -309,6 +317,9 @@ CinnamenuPanel.prototype = {
 
     if (!refresh) {
       this._currentSelectKey = '_selectFavorites';
+      if (this._currentCategoryButton) {
+        this._previousCategoryButton = this._currentCategoryButton;
+      }
       this._currentCategoryButton = button;
     } else {
       this[this._currentSelectKey](this._currentCategoryButton);
@@ -326,6 +337,9 @@ CinnamenuPanel.prototype = {
     let allPlaces = places.concat(bookmarks.concat(devices));
     this._displayApplications(allPlaces);
     this._currentSelectKey = '_selectAllPlaces';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
@@ -336,6 +350,9 @@ CinnamenuPanel.prototype = {
     let bookmarks = this._listBookmarks();
     this._displayApplications(bookmarks);
     this._currentSelectKey = '_selectBookmarks';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
@@ -346,6 +363,9 @@ CinnamenuPanel.prototype = {
     let devices = this._listDevices();
     this._displayApplications(devices);
     this._currentSelectKey = '_selectDevices';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
@@ -356,6 +376,9 @@ CinnamenuPanel.prototype = {
     let recent = this._listRecent();
     this._displayApplications(recent);
     this._currentSelectKey = '_selectRecent';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
@@ -366,6 +389,9 @@ CinnamenuPanel.prototype = {
     let webBookmarks = this._listWebBookmarks();
     this._displayApplications(webBookmarks);
     this._currentSelectKey = '_selectWebBookmarks';
+    if (this._currentCategoryButton) {
+      this._previousCategoryButton = this._currentCategoryButton;
+    }
     this._currentCategoryButton = button;
   },
 
@@ -373,7 +399,7 @@ CinnamenuPanel.prototype = {
     this._applicationsViewMode = mode;
     let refresh = true;
 
-    if (mode == ApplicationsViewMode.LIST) {
+    if (mode === ApplicationsViewMode.LIST) {
       this.applicationsListBox.show();
       this.applicationsGridBox.hide();
     } else {
@@ -459,24 +485,26 @@ CinnamenuPanel.prototype = {
   },
 
   _clearApplicationSelections: function(selectedApplication) {
-    this.applicationsListBox.get_children().forEach(function(actor) {
-      if (selectedApplication && (actor == selectedApplication)) {
-        actor.add_style_class_name('selected');
+    let children = this.applicationsListBox.get_children();
+    for (let i = 0, len = children.length; i < len; i++) {
+      if (selectedApplication && children[i] === selectedApplication) { // TBD object equality
+        children[i].add_style_class_name('selected');
       } else {
-        actor.remove_style_class_name('selected');
+        children[i].remove_style_class_name('selected');
       }
-    });
+    }
+    children = this.applicationsGridBox.get_children();
 
-    this.applicationsGridBox.get_children().forEach(function(actor) {
-      if (selectedApplication && (actor == selectedApplication)) {
-        actor.add_style_class_name('selected');
+    for (let i = 0, len = children.length; i < len; i++) {
+      if (selectedApplication && children[i] === selectedApplication) { // TBD object equality
+        children[i].add_style_class_name('selected');
       } else {
-        actor.remove_style_class_name('selected');
+        children[i].remove_style_class_name('selected');
       }
-    });
+    }
   },
 
-  _clearApplicationsBox: function(selectedCategory, refresh) {
+  _clearApplicationsBox: function() {
     if (this.applicationsListBox !== undefined) {
       let listActors = this.applicationsListBox.get_children();
       if (listActors) {
@@ -655,11 +683,11 @@ CinnamenuPanel.prototype = {
   _listApplications: function(category_menu_id, pattern) {
     let appList = [];
 
-    if (category_menu_id == 'all') {
+    if (category_menu_id === 'all') {
       for (let directory in this.applicationsByCategory) {
         appList = appList.concat(this.applicationsByCategory[directory]);
       }
-    } else if (category_menu_id == 'favorites') {
+    } else if (category_menu_id === 'favorites') {
       appList = this.favorites;
     } else {
       if (category_menu_id) {
@@ -707,7 +735,7 @@ CinnamenuPanel.prototype = {
     }
 
     // Ignore favorites when sorting
-    if (category_menu_id != 'favorites') {
+    if (category_menu_id !== 'favorites') {
       if (res === undefined) {
         res = [];
       }
@@ -726,7 +754,7 @@ CinnamenuPanel.prototype = {
     return res;
   },
 
-  _calculateApplicationsBoxWidth: function(isListView) {
+  _calculateApplicationsBoxWidth: function(isListView) { // TBD
     // Calculate visible menu boxes and adjust width accordingly
     let searchBoxWidth = this.searchBox.width;
     let searchBoxMargin = {
@@ -736,12 +764,6 @@ CinnamenuPanel.prototype = {
       right: 0
     };
     let searchBoxBorder = {
-      left: 0,
-      top: 0,
-      bottom: 0,
-      right: 0
-    };
-    let searchBoxPadding = {
       left: 0,
       top: 0,
       bottom: 0,
@@ -784,12 +806,6 @@ CinnamenuPanel.prototype = {
       bottom: 0,
       right: 0
     };
-    let viewModeBoxWrapperPadding = {
-      left: 0,
-      top: 0,
-      bottom: 0,
-      right: 0
-    };
     if (this.viewModeBoxWrapper.get_stage()) {
       let themeNode = this.viewModeBoxWrapper.get_theme_node();
       viewModeBoxWrapperMargin = {
@@ -803,12 +819,6 @@ CinnamenuPanel.prototype = {
         top: themeNode.get_border_width(St.Side.TOP),
         bottom: themeNode.get_border_width(St.Side.BOTTOM),
         right: themeNode.get_border_width(St.Side.RIGHT),
-      };
-      viewModeBoxWrapperPadding = {
-        left: themeNode.get_padding(St.Side.LEFT),
-        top: themeNode.get_padding(St.Side.TOP),
-        bottom: themeNode.get_padding(St.Side.BOTTOM),
-        right: themeNode.get_padding(St.Side.RIGHT),
       };
       viewModeBoxWrapperWidth = this.viewModeBoxWrapper.width + viewModeBoxWrapperMargin.left +
         viewModeBoxWrapperMargin.right + viewModeBoxWrapperBorder.left + viewModeBoxWrapperBorder.right;
@@ -1018,6 +1028,9 @@ CinnamenuPanel.prototype = {
         appButton.icon.realize();
       } else { // GridView
         let gridLayout = this.applicationsGridBox.layout_manager;
+        if (!gridLayout) {
+          return false;
+        }
         gridLayout.pack(appButton.actor, column, rownum);
         appButton.icon.realize();
         column++;
@@ -1034,11 +1047,12 @@ CinnamenuPanel.prototype = {
     }
 
     for (let z = 0, len = appList.length; z < len; z++) {
-      if (appList[z] === undefined) {
+      let app = appList[z];
+      if (!app) {
         continue;
       }
 
-      let appType = appList[z].type;
+      let appType = app.type;
       if (appType === undefined) {
         appType = ApplicationType._applications;
       }
@@ -1055,7 +1069,6 @@ CinnamenuPanel.prototype = {
 
         ++appIndex;
 
-        let app = appList[z];
         if (refresh || !this._applications[app]) {
           createAppButton(app, appType, len);
         }
@@ -1175,6 +1188,7 @@ CinnamenuPanel.prototype = {
   },
 
   selectActiveContainerItem: function(symbol, code, isFromSearch) {
+    // Todo: this is old code grom Gnomenu, and needs to be cleaned up.
     // Any items in container?
     let children = [];
     let columns, row;
@@ -1341,8 +1355,16 @@ CinnamenuPanel.prototype = {
   },
 
   resetSearch: function() {
-    this.searchEntry.set_text('');
+    if (this.answerText) {
+      this.answerText.set_text('');
+    }
+    if (this.searchEntry) {
+      this.searchEntry.set_text('');
+    }
     this.searchActive = false;
+    if (this._activeContainer) {
+      this._activeContainer.show();
+    }
   },
 
   resetSearchWithFocus: function() {
@@ -1351,8 +1373,19 @@ CinnamenuPanel.prototype = {
     this.searchActive = false;
   },
 
-  _onSearchTextChanged: function(se, prop) {
+  _onSearchTextChanged: function() {
     let searchText = this.searchEntry.get_text();
+
+    let categoryChildren = this.categoriesBox.get_children();
+
+    for (let i = 0, len = categoryChildren.length; i < len; i++) {
+      if (searchText.length > 0) {
+        categoryChildren[i]._delegate.disable();
+      } else {
+        categoryChildren[i]._delegate.enable();
+      }
+    }
+
     if (this.searchActive) {
       if (searchText.length === 0) {
         this._resetDisplayApplicationsToStartup();
@@ -1405,6 +1438,18 @@ CinnamenuPanel.prototype = {
     }
     this._previousSearchPattern = pattern;
 
+    let isMathExpression = pattern.search(/([-+]?[0-9]*\.?[0-9]+[\/\+\-\*])+([-+]?[0-9]*\.?[0-9]+)/gm) > -1;
+
+    if (isMathExpression) {
+      try {
+        let answer = eval(pattern);
+        let answerText = pattern + ' = ' + answer;
+        this.answerText.set_text(answerText);
+        this.answerText.show();
+        this._activeContainer.hide();
+      } catch (e) {}
+    }
+
     this._activeContainer = null;
     this._selectedItemIndex = -1;
     this._previousSelectedItemIndex = null;
@@ -1456,7 +1501,7 @@ CinnamenuPanel.prototype = {
     this._clearApplicationsBox();
     this._displayApplications(results, null, true);
 
-    this._activeContainer = (this._applicationsViewMode == ApplicationsViewMode.LIST) ? this.applicationsListBox : this.applicationsGridBox;
+    this._activeContainer = this._applicationsViewMode === ApplicationsViewMode.LIST ? this.applicationsListBox : this.applicationsGridBox;
     this.selectActiveContainerItem(null, null, true);
 
     return false;
@@ -1485,7 +1530,8 @@ CinnamenuPanel.prototype = {
     // mainbox holds the topPane and bottomPane
     this.mainBox = new St.BoxLayout({
       style_class: 'menu-applications-inner-box',
-      vertical: true
+      vertical: true,
+      show_on_set_parent: false
     }); // menu
 
     // Top pane holds user group, view mode, and search (packed horizonally)
@@ -1510,14 +1556,14 @@ CinnamenuPanel.prototype = {
     });
 
     // Allow the menu to be taller for high resolution displays.
-    let menuHeight = Math.round(Main.layoutManager.primaryMonitor.height / 2.055)
-    menuHeight = menuHeight < 530 ? 530 : menuHeight;
+    this.menuHeight = Math.round(Math.abs(Main.layoutManager.primaryMonitor.height / 2.055))
+    this.menuHeight = this.menuHeight < 530 ? 530 : this.menuHeight;
 
     // groupCategoriesWorkspacesScrollBox allows categories or workspaces to scroll vertically
     this.groupCategoriesWorkspacesScrollBox = new St.ScrollView({
       x_fill: true,
       y_fill: false,
-      height: menuHeight,
+      height: this.menuHeight,
       y_align: St.Align.START,
       style_class: 'vfade cinnamenu-categories-workspaces-scrollbox'
     });
@@ -1530,12 +1576,6 @@ CinnamenuPanel.prototype = {
     }));
     this.groupCategoriesWorkspacesScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER);
     this.groupCategoriesWorkspacesScrollBox.set_mouse_scrolling(true);
-    /*this.groupCategoriesWorkspacesScrollBox.connect('button-release-event', Lang.bind(this, function(actor, event) {
-      let button = event.get_button();
-      if (button == 3) { //right click
-        // This was for showing workspace thumbnails, but serves no function on Cinnamon. Whether to use this signal or not TBD.
-      }
-    }));*/
 
     // selectedAppBox
     this.selectedAppBox = new St.BoxLayout({
@@ -1571,25 +1611,25 @@ CinnamenuPanel.prototype = {
     });
 
     this.toggleListGridView = new GroupButton(this, viewModeButtonIcon, viewModeButtonIconSize, null, null);
-    this.toggleListGridView.setButtonEnterCallback(Lang.bind(this, function() {
+    this.toggleListGridView.setButtonEnterCallback(()=>{
       this.toggleListGridView.actor.add_style_pseudo_class('hover');
       if (this._applicationsViewMode === ApplicationsViewMode.LIST) {
         this.selectedAppTitle.set_text(_("Grid View"));
-        this.selectedAppDescription.set_text(_("Switch to grid view"));
+        this.selectedAppDescription.set_text('Switch to grid view');
       } else {
         this.selectedAppTitle.set_text(_("List View"));
-        this.selectedAppDescription.set_text(_("Switch to list view"));
+        this.selectedAppDescription.set_text('Switch to list view');
       }
-    }));
-    this.toggleListGridView.setButtonLeaveCallback(Lang.bind(this, function() {
+    });
+    this.toggleListGridView.setButtonLeaveCallback(()=>{
       this.toggleListGridView.actor.remove_style_pseudo_class('hover');
       this.selectedAppTitle.set_text('');
       this.selectedAppDescription.set_text('');
-    }));
-    this.toggleListGridView.setButtonPressCallback(Lang.bind(this, function() {
+    });
+    this.toggleListGridView.setButtonPressCallback(()=>{
       this.toggleListGridView.actor.add_style_pseudo_class('pressed');
-    }));
-    this.toggleListGridView.setButtonReleaseCallback(Lang.bind(this, function() {
+    });
+    this.toggleListGridView.setButtonReleaseCallback(()=>{
       this.toggleListGridView.actor.remove_style_pseudo_class('pressed');
       this.selectedAppTitle.set_text('');
       this.selectedAppDescription.set_text('');
@@ -1602,10 +1642,10 @@ CinnamenuPanel.prototype = {
         this._switchApplicationsView(ApplicationsViewMode.LIST);
         this._applet.settings.setValue('startup-view-mode', 0);
       }
-      // Retrigger an app list render until we figure out why its not rendering anything on toggle.
-      this._calculateApplicationsBoxWidth(this._applicationsViewMode === ApplicationsViewMode.LIST);
+      // Retrigger an app list render until we figure out why its not rendering anything on toggle. // TBD - causes extra width on lists
+      //this._calculateApplicationsBoxWidth(this._applicationsViewMode === ApplicationsViewMode.LIST);
       this[this._currentSelectKey](this._currentCategoryButton);
-    }));
+    });
 
     this.viewModeBox.add(this.toggleListGridView.actor, {
       x_fill: false,
@@ -1629,7 +1669,8 @@ CinnamenuPanel.prototype = {
       icon_name: 'edit-clear'
     });
     this.searchBox = new St.BoxLayout({
-      style_class: 'menu-search-box'
+      style_class: 'menu-search-box',
+      height: 30
     });
     this.searchEntry = new St.Entry({
       name: 'menu-search-entry',
@@ -1675,11 +1716,6 @@ CinnamenuPanel.prototype = {
     this.allAppCategory = allAppCategory;
     this.categoriesBox.add_actor(allAppCategory.actor);
 
-    // Load 'favorite applications' category
-    let favAppCategory = new CategoryListButton(this, 'favorites', _("Favorite Apps"), 'address-book-new');
-    this.favAppCategory = favAppCategory;
-    this.categoriesBox.add_actor(favAppCategory.actor);
-
     // Load rest of categories
 
     let sortDirs = (dirs) => {
@@ -1720,7 +1756,7 @@ CinnamenuPanel.prototype = {
       let iter = root.iter();
       let nextType;
 
-      while ((nextType = iter.next()) != CMenu.TreeItemType.INVALID) {
+      while ((nextType = iter.next()) !== CMenu.TreeItemType.INVALID) {
         if (nextType == CMenu.TreeItemType.DIRECTORY) {
           dirs.push(iter.get_directory());
         }
@@ -1753,8 +1789,15 @@ CinnamenuPanel.prototype = {
     }
 
     // Load 'bookmarks' category
-    this.webBookmarksCategory = new CategoryListButton(this, 'bookmarks', _("Bookmarks"), 'emblem-favorite', '_selectWebBookmarks');
-    this.categoriesBox.add_actor(this.webBookmarksCategory.actor);
+    if (this._applet.enableBookmarks) {
+      this.webBookmarksCategory = new CategoryListButton(this, 'bookmarks', _("Bookmarks"), 'emblem-favorite', '_selectWebBookmarks');
+      this.categoriesBox.add_actor(this.webBookmarksCategory.actor);
+    }
+
+    // Load 'favorite applications' category
+    let favAppCategory = new CategoryListButton(this, 'favorites', _("Favorite Apps"), 'address-book-new');
+    this.favAppCategory = favAppCategory;
+    this.categoriesBox.add_actor(favAppCategory.actor);
 
     // PowerGroupBox
     this.powerGroupBox = new St.BoxLayout({
@@ -1796,7 +1839,7 @@ CinnamenuPanel.prototype = {
     logoutUser.setButtonEnterCallback(Lang.bind(this, function() {
       logoutUser.actor.add_style_class_name('selected');
       this.selectedAppTitle.set_text(_("Logout"));
-      this.selectedAppDescription.set_text(_("Leave the session"));
+      this.selectedAppDescription.set_text('Leave the session');
     }));
     logoutUser.setButtonLeaveCallback(Lang.bind(this, function() {
       logoutUser.actor.remove_style_class_name('selected');
@@ -1819,7 +1862,7 @@ CinnamenuPanel.prototype = {
     systemShutdown.setButtonEnterCallback(Lang.bind(this, function() {
       systemShutdown.actor.add_style_class_name('selected');
       this.selectedAppTitle.set_text(_("Quit"));
-      this.selectedAppDescription.set_text(_("Shutdown the computer"));
+      this.selectedAppDescription.set_text('Shutdown the computer');
     }));
     systemShutdown.setButtonLeaveCallback(Lang.bind(this, function() {
       systemShutdown.actor.remove_style_class_name('selected');
@@ -1864,6 +1907,7 @@ CinnamenuPanel.prototype = {
       x_fill: true,
       y_fill: false,
       y_align: St.Align.START,
+      height: this.menuHeight,
       style_class: 'vfade menu-applications-scrollbox'
     });
     let vscrollApplications = this.applicationsScrollBox.get_vscroll_bar();
@@ -1879,10 +1923,13 @@ CinnamenuPanel.prototype = {
       vertical: true,
       x_expand: true
     });
+
+    let widths = [0, 0, 0, 625, 700, 725, 900, 1025];
     this.applicationsGridBox = new St.Widget({
       layout_manager: new Clutter.TableLayout(),
       reactive: true,
-      style_class: ''
+      style_class: '',
+      width: widths[this._applet.appsGridColumnCount]
     });
     this.applicationsBoxWrapper = new St.BoxLayout({
       style_class: 'menu-applications-inner-box',
@@ -1895,6 +1942,18 @@ CinnamenuPanel.prototype = {
       y_align: St.Align.START
     });
     this.applicationsBoxWrapper.add(this.applicationsListBox, {
+      x_fill: false,
+      y_fill: false,
+      x_align: St.Align.START,
+      y_align: St.Align.START
+    });
+    this.answerText = new St.Label({
+      style_class: 'menu-selected-app-title',
+      style: 'padding-top: 14px; min-width: 240px;',
+      text: '',
+      show_on_set_parent: false
+    });
+    this.applicationsBoxWrapper.add(this.answerText, {
       x_fill: false,
       y_fill: false,
       x_align: St.Align.START,
@@ -1931,7 +1990,9 @@ CinnamenuPanel.prototype = {
       x_fill: false,
       y_fill: false,
       x_align: St.Align.START,
-      y_align: St.Align.START
+      y_align: St.Align.START,
+      y_expand: false,
+      expand: false
     });
     this.groupCategoriesWorkspacesScrollBox.add_actor(this.groupCategoriesWorkspacesWrapper);
 
@@ -1962,7 +2023,7 @@ CinnamenuPanel.prototype = {
       y_align: St.Align.START
     });
     this.bottomPane.add(bottomPaneSpacer1, {
-      expand: true,
+      expand: false,
       x_align: St.Align.MIDDLE,
       y_align: St.Align.MIDDLE
     });
@@ -1985,18 +2046,18 @@ CinnamenuPanel.prototype = {
     this.menu.addMenuItem(this._dummySeparator);
 
     // Set height constraints on scrollboxes (we also set height when menu toggle)
-    /*this.applicationsScrollBox.add_constraint(new Clutter.BindConstraint({
+    this.applicationsScrollBox.add_constraint(new Clutter.BindConstraint({
       name: 'appScrollBoxConstraint',
       source: this.groupCategoriesWorkspacesScrollBox,
       coordinate: Clutter.BindCoordinate.HEIGHT,
       offset: 0
-    }));*/
+    }));
 
     this._widthCategoriesBox = this.categoriesBox.width;
   },
 
   destroyContainer: function(container) {
-    if (!container && container === undefined) {
+    if (!container) {
       return false;
     }
     let children = container.get_children();
@@ -2012,26 +2073,31 @@ CinnamenuPanel.prototype = {
     global.settings.disconnect(this.panelEditId);
     this.destroyAppButtons();
     this.destroyDisplayed();
-    PanelMenu.Button.prototype.destroy.call(this)
     this._searchWebBookmarks.destroy();
   },
 
   destroyDisplayed: function() {
-    this.destroyContainer(this.searchBox);
-    this.destroyContainer(this.viewModeBox);
-    this.destroyContainer(this.viewModeWrapper);
-    this.destroyContainer(this.categoriesBox);
-    this.destroyContainer(this.powerGroupBox);
-    this.destroyContainer(this.viewModeBox);
-    this.destroyContainer(this.applicationsGridBox);
-    this.destroyContainer(this.applicationsListBox);
-    this.destroyContainer(this.applicationsBoxWrapper);
-    this.destroyContainer(this.applicationsScrollBox);
-    this.destroyContainer(this.topPane);
-    this.destroyContainer(this.groupCategoriesWorkspacesScrollBox);
-    this.destroyContainer(this.middlePane);
-    this.destroyContainer(this.bottomPane);
-    this.destroyContainer(this.mainBox);
+    let containers = [
+      'searchBox',
+      'viewModeBox',
+      'categoriesBox',
+      'powerGroupBox',
+      'applicationsGridBox',
+      'applicationsListBox',
+      'applicationsBoxWrapper',
+      'applicationsScrollBox',
+      'topPane',
+      'groupCategoriesWorkspacesScrollBox',
+      'middlePane',
+      'bottomPane',
+      'mainbox'
+    ];
+
+    for (let i = 0, len = containers.length; i < len; i++) {
+      if (typeof this[containers[i]] !== 'undefined') {
+        this.destroyContainer(this[containers[i]]);
+      }
+    }
   },
 
   destroyAppButtons: function() {
@@ -2044,3 +2110,5 @@ CinnamenuPanel.prototype = {
     this.appButtons = [];
   },
 };
+
+Signals.addSignalMethods(CinnamenuPanel.prototype)

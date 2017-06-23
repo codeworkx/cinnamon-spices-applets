@@ -4,25 +4,22 @@ const Clutter = imports.gi.Clutter;
 const St = imports.gi.St;
 const Cinnamon = imports.gi.Cinnamon;
 const Lang = imports.lang;
-const Signals = imports.signals;
-const Params = imports.misc.params;
 const PopupMenu = imports.ui.popupMenu;
 const FileUtils = imports.misc.fileUtils;
 const Util = imports.misc.util;
 const Mainloop = imports.mainloop;
-//const DND = imports.ui.dnd;
 const AppletDir = imports.ui.appletManager.applets['Cinnamenu@json'];
 
 // l10n
 const Gettext = imports.gettext;
-const UUID = "Cinnamenu@json";
+const UUID = 'Cinnamenu@json';
 
 function _(str) {
-    let cinnamonTranslation = Gettext.gettext(str);
-    if(cinnamonTranslation != str) {
-        return cinnamonTranslation;
-    }
-    return Gettext.dgettext(UUID, str);
+  let cinnamonTranslation = Gettext.gettext(str);
+  if (cinnamonTranslation !== str) {
+    return cinnamonTranslation;
+  }
+  return Gettext.dgettext(UUID, str);
 }
 
 const Chromium = AppletDir.webChromium;
@@ -104,8 +101,8 @@ CategoryListButton.prototype = {
     let iconSize = _parent._applet.categoryIconSize;
 
     this._dir = dir;
+    this.disabled = false;
     let categoryNameText = '';
-    //let categoryIconName = null;
 
     let icon;
 
@@ -121,7 +118,7 @@ CategoryListButton.prototype = {
       if (this.icon_name) {
         this.icon = St.TextureCache.get_default().load_gicon(null, icon, iconSize);
       } else {
-        icon = dir.get_icon() ? dir.get_icon().get_names().toString() : 'error';
+        icon = dir.get_icon() && typeof dir.get_icon().get_names === 'function' ? dir.get_icon().get_names().toString() : 'error';
         this.icon = new St.Icon({
           icon_name: icon,
           icon_size: iconSize
@@ -154,6 +151,10 @@ CategoryListButton.prototype = {
   },
 
   handleEnter: function() {
+    if (this.disabled) {
+      return false;
+    }
+
     this.actor.add_style_class_name('menu-category-button-selected');
     this._parent.selectedAppTitle.set_text(this.categoryNameText);
     this._parent.selectedAppDescription.set_text('');
@@ -175,9 +176,27 @@ CategoryListButton.prototype = {
   },
 
   handleButtonRelease: function() {
+    if (this.disabled) {
+      return false;
+    }
+
     this._parent.selectedAppTitle.set_text(this.categoryNameText);
     this._parent.selectedAppDescription.set_text('');
     this._parent._selectCategory(this);
+  },
+
+  disable: function() {
+    if (this.actor.has_style_class_name('menu-category-button-greyed')) {
+      return false;
+    }
+
+    this.actor.set_style_class_name('menu-category-button-greyed');
+    this.disabled = true;
+  },
+
+  enable: function () {
+    this.actor.set_style_class_name('menu-category-button');
+    this.disabled = false;
   },
 
   destroy: function(actor) {
@@ -256,15 +275,13 @@ ApplicationContextMenuItem.prototype = {
       case 'add_to_favorites':
         this._appButton._parent._applet.appFavorites.addFavorite(this._appButton.app.get_id());
         this._appButton.menu.close();
-        this._appButton._parent.menuIsOpen = false;
         break;
       case 'remove_from_favorites':
         this._appButton._parent._applet.appFavorites.removeFavorite(this._appButton.app.get_id());
         this._appButton.menu.close();
-        this._appButton._parent.menuIsOpen = false;
         break;
       case 'uninstall':
-        Util.spawnCommandLine('gksu -m \'' + _("Please provide your password to uninstall this application") 
+        Util.spawnCommandLine('gksu -m \'' + _('Please provide your password to uninstall this application')
           + '\' /usr/bin/cinnamon-remove-application \'' + this._appButton.app.get_app_info().get_filename() + '\'');
         this._appButton._parent.menu.close();
         break;
@@ -308,7 +325,7 @@ AppListGridButton.prototype = {
     this.appListLength = appListLength;
     this._stateChangedId = 0;
     this.column = null;
-    let style;
+    let style = '';
 
     this.appIndex = appIndex;
 
@@ -513,7 +530,6 @@ AppListGridButton.prototype = {
   },
 
   activate: function (event) {
-    //this.unhighlight();
     this._parent.selectedAppTitle.set_text('');
     this._parent.selectedAppDescription.set_text('');
     if (this.appType === ApplicationType._applications) {
@@ -539,12 +555,12 @@ AppListGridButton.prototype = {
         }
       }
     }
-    this.toggleMenu(this._parent._applet.startupViewMod === ApplicationsViewMode.LIST);
+    this.toggleMenu(this._parent._applet.startupViewMode === ApplicationsViewMode.LIST);
   },
 
   setColumn: function(column) {
     this.column = column;
-    if (column === 0 || column === this.appListLength) {
+    if ((column === 0 || column === this.appListLength) && this.appListLength > 1) {
       this.menu.actor.set_position(-90, 50);
     } else if (column === this._parent._applet.appsGridColumnCount) {
       this.menu.actor.set_position(160, 50);
@@ -598,30 +614,29 @@ AppListGridButton.prototype = {
     if (!this.menu.isOpen) {
       let children = this.menu.box.get_children();
       for (var i = 0; i < children.length; i++) {
-        children[i].destroy();
         this.menu.box.remove_actor(children[i]);
       }
       this._parent.menuIsOpen = this.appIndex;
 
       let menuItem;
-      menuItem = new ApplicationContextMenuItem(this, _("Add to panel"), 'add_to_panel', 'list-add');
+      menuItem = new ApplicationContextMenuItem(this, _('Add to panel'), 'add_to_panel', 'list-add');
       this.menu.addMenuItem(menuItem);
       if (USER_DESKTOP_PATH) {
-        menuItem = new ApplicationContextMenuItem(this, _("Add to desktop"), 'add_to_desktop', 'computer');
+        menuItem = new ApplicationContextMenuItem(this, _('Add to desktop'), 'add_to_desktop', 'computer');
         this.menu.addMenuItem(menuItem);
       }
       if (this._parent._applet.appFavorites.isFavorite(this.app.get_id())) {
-        menuItem = new ApplicationContextMenuItem(this, _("Remove from favorites"), 'remove_from_favorites',
+        menuItem = new ApplicationContextMenuItem(this, _('Remove from favorites'), 'remove_from_favorites',
           'starred');
         this.menu.addMenuItem(menuItem);
       } else {
-        menuItem = new ApplicationContextMenuItem(this, _("Add to favorites"), 'add_to_favorites', 'non-starred');
+        menuItem = new ApplicationContextMenuItem(this, _('Add to favorites'), 'add_to_favorites', 'non-starred');
         this.menu.addMenuItem(menuItem);
       }
-      menuItem = new ApplicationContextMenuItem(this, _("Uninstall"), 'uninstall', 'edit-delete');
+      menuItem = new ApplicationContextMenuItem(this, _('Uninstall'), 'uninstall', 'edit-delete');
       this.menu.addMenuItem(menuItem);
       if (this._parent._isBumblebeeInstalled) {
-        menuItem = new ApplicationContextMenuItem(this, _("Run with NVIDIA GPU"), 'run_with_nvidia_gpu', 'cpu');
+        menuItem = new ApplicationContextMenuItem(this, _('Run with NVIDIA GPU'), 'run_with_nvidia_gpu', 'cpu');
         this.menu.addMenuItem(menuItem);
       }
       this.actor.add_style_class_name('menu-application-button-selected');
@@ -639,7 +654,7 @@ AppListGridButton.prototype = {
       // Allow other buttons hover functions to take effect.
       this._parent.menuIsOpen = null;
     }
-    this.menu.toggle_with_options(this._parent._applet.enableAnimations);
+    this.menu.toggle_with_options(this._parent._applet.enableAnimation);
     return true
   },
 
@@ -649,12 +664,9 @@ AppListGridButton.prototype = {
     let children = this.menu.box.get_children();
     for (var i = 0; i < children.length; i++) {
       this.menu.box.remove_actor(children[i]);
-      children[i].destroy();
     }
     this.menu.destroy();
     this.dot.destroy();
-    this.label.unrealize();
-    this.icon.unrealize();
     this.label.destroy();
     this.icon.destroy();
     if (this._iconContainer) {
@@ -716,9 +728,6 @@ GroupButton.prototype = {
       });
       this.addActor(this.label);
     }
-
-    // Connect signals
-    //this.actor.connect('touch-event', Lang.bind(this, this._onTouchEvent));
   },
 
   setIcon: function(iconName) {
@@ -765,10 +774,6 @@ GroupButton.prototype = {
     this.buttonPressCallback.call();
     this.buttonReleaseCallback.call();
   },
-
-  /*_onTouchEvent: function(actor, event) {
-    return Clutter.EVENT_PROPAGATE;
-  },*/
 
   _onButtonReleaseEvent: function(actor) {
     return false;

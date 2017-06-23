@@ -27,7 +27,7 @@ const Gtk = imports.gi.Gtk;
 const St = imports.gi.St;
 const NMClient = imports.gi.NMClient;
 const Gettext = imports.gettext;
-const _ = Gettext.gettext;
+const UUID = "sysmonitor@orcus";
 
 const CONFIG_FILE = "settings.json";
 const DEFAULT_CONFIG = {
@@ -73,6 +73,12 @@ const DEFAULT_CONFIG = {
     }
 };
 
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
+
 function MyApplet(metadata, orientation) {
     this._init(metadata, orientation);
 }
@@ -87,10 +93,10 @@ MyApplet.prototype = {
             this.dir = metadata.path;
             this.loadSettings();
             this.initContextMenu();
-            
+
             this.areas = [];
             this.graphs = [];
-            
+
             let ncpu = GTop.glibtop_get_sysinfo().ncpu;
             if (this.cfg.cpu.enabled)
                 this.addGraph(new CpuDataProvider(),  this.cfg.cpu.colors);
@@ -109,20 +115,20 @@ MyApplet.prototype = {
             global.logError(e);
         }
     },
-    
+
     on_applet_clicked: function(event) {
         GLib.spawn_command_line_async('gnome-system-monitor');
     },
-    
+
     on_orientation_changed: function(orientation) {
         this.initContextMenu();
     },
-    
+
     initContextMenu: function() {
         let settings_menu_item = new Applet.MenuItem(_("Settings"), Gtk.STOCK_EDIT, Lang.bind(this, this.launchSettings));
         this._applet_context_menu.addMenuItem(settings_menu_item);
     },
-    
+
     addGraph: function(provider, colors) {
         let index = this.areas.length;
         let area = new St.DrawingArea();
@@ -132,7 +138,7 @@ MyApplet.prototype = {
         let graph = new Graph(area, provider, colors, this.cfg.backgroundColor, this.cfg.borderColor);
         provider.refreshRate = this.cfg.refreshRate;
         graph.smooth = this.cfg.smooth;
-        
+
         this.areas.push(area);
         this.graphs.push(graph);
         return graph;
@@ -150,7 +156,7 @@ MyApplet.prototype = {
         this.set_applet_tooltip(tooltip);
         Mainloop.timeout_add(this.cfg.refreshRate, Lang.bind(this, this.update));
     },
-    
+
     loadSettings: function() {
         try {
             let path = GLib.build_filenamev([this.dir, CONFIG_FILE]);
@@ -161,9 +167,9 @@ MyApplet.prototype = {
             this.cfg = DEFAULT_CONFIG;
         }
     },
-    
+
     launchSettings: function() {
-        GLib.spawn_async(this.dir, ["gjs", "settings.js"], null,
+        GLib.spawn_async(this.dir, ["cjs", "settings.js"], null,
             GLib.SpawnFlags.SEARCH_PATH, null);
     }
 };
@@ -185,7 +191,7 @@ Graph.prototype = {
         this.dim = this.provider.getDim();
         this.autoScale = false;
         this.scale = 1;
-        
+
         for (let i = 0; i < this.data.length; ++i)
         {
             this.data[i] = new Array(this.dim);
@@ -193,13 +199,13 @@ Graph.prototype = {
                 this.data[i][j] = 0;
         }
     },
-    
+
     refresh: function() {
         let d = this.provider.getData();
         this.data.push(d);
         this.data.shift();
         this.area.queue_repaint();
-        
+
         if (this.autoScale)
         {
             let maxVal = this.minScale;
@@ -212,14 +218,14 @@ Graph.prototype = {
             this.scale = 1.0 / maxVal;
         }
     },
-    
+
     dataSum: function(i, depth) {
         let sum = 0;
         for (let j = 0; j <= depth; ++j)
             sum += this.data[i][j];
         return sum;
     },
-    
+
     paint: function() {
         let cr = this.area.get_context();
         let [width, height] = this.area.get_size();
@@ -258,12 +264,12 @@ Graph.prototype = {
         cr.rectangle(0.5, 0.5, width - 1, height - 1);
         cr.stroke();
     },
-    
+
     setColor: function(cr, i) {
         let c = this.colors[i % this.colors.length];
         cr.setSourceRGBA(c[0], c[1], c[2], c[3]);
     },
-    
+
     setAutoScale: function(minScale)
     {
         if (minScale > 0)
@@ -289,11 +295,11 @@ CpuDataProvider.prototype = {
         this.iowait_last = 0;
         this.total_last = 0;
     },
-    
+
     getDim: function() {
         return 3;
     },
-    
+
     getData: function() {
         GTop.glibtop_get_cpu(this.gtop);
         let delta = (this.gtop.total - this.total_last);
@@ -313,10 +319,10 @@ CpuDataProvider.prototype = {
         this.iowait_last = this.gtop.iowait;
         this.total_last = this.gtop.total;
         let used = 1-idle-nice-sys-iowait;
-        this.text = "CPU: " + Math.round(100 * used) + " %";
+        this.text = _("CPU: ") + Math.round(100 * used) + " %";
         return [used, nice, sys, iowait];
     },
-    
+
     getText: function() {
         return this.text;
     }
@@ -330,20 +336,20 @@ MemDataProvider.prototype = {
     _init: function() {
         this.gtop = new GTop.glibtop_mem();
     },
-    
+
     getDim: function() {
         return 2;
     },
-    
+
     getData: function() {
         GTop.glibtop_get_mem(this.gtop);
         let used = this.gtop.used / this.gtop.total;
         let cached = (this.gtop.buffer + this.gtop.cached) / this.gtop.total;
-        this.text = "Memory: " + Math.round((this.gtop.used - this.gtop.cached - this.gtop.buffer) / (1024 * 1024))
-            + " / " + Math.round(this.gtop.total / (1024 * 1024)) + " MB";
+        this.text = _("Memory: ") + Math.round((this.gtop.used - this.gtop.cached - this.gtop.buffer) / (1024 * 1024))
+            + " / " + Math.round(this.gtop.total / (1024 * 1024)) + _(" MB");
         return [used-cached, cached];
     },
-    
+
     getText: function() {
         return this.text;
     }
@@ -357,19 +363,19 @@ SwapDataProvider.prototype = {
     _init: function() {
         this.gtop = new GTop.glibtop_swap();
     },
-    
+
     getDim: function() {
         return 1;
     },
-    
+
     getData: function() {
         GTop.glibtop_get_swap(this.gtop);
         let used = this.gtop.used / this.gtop.total;
-        this.text = "Swap: " + Math.round(this.gtop.used / (1024 * 1024))
-            + " / " + Math.round(this.gtop.total / (1024 * 1024)) + " MB";
+        this.text = _("Swap: ") + Math.round(this.gtop.used / (1024 * 1024))
+            + " / " + Math.round(this.gtop.total / (1024 * 1024)) + _(" MB");
         return [used];
     },
-    
+
     getText: function() {
         return this.text;
     }
@@ -386,24 +392,24 @@ NetDataProvider.prototype = {
         this.devices = [];
         for (let i = 0; i < dev.length; ++i)
             this.devices.push(dev[i].get_iface());
-        
+
         [this.down_last, this.up_last] = this.getNetLoad();
     },
-    
+
     getDim: function() {
         return 2;
     },
-    
+
     getData: function() {
         let [down, up] = this.getNetLoad();
         let down_delta = (down - this.down_last) * 1000 / this.refreshRate;
         let up_delta = (up - this.up_last) * 1000 / this.refreshRate;
         this.down_last = down;
         this.up_last = up;
-        this.text = "Network D/U: " + Math.round(down_delta/1024) + " / " + Math.round(up_delta/1024) + " KB/s";
+        this.text = _("Network D/U: ") + Math.round(down_delta/1024) + " / " + Math.round(up_delta/1024) + _(" KB/s");
         return [down_delta, up_delta];
     },
-    
+
     getText: function() {
         return this.text;
     },
@@ -429,20 +435,20 @@ LoadAvgDataProvider.prototype = {
     _init: function() {
         this.gtop = new GTop.glibtop_loadavg();
     },
-    
+
     getDim: function() {
         return 1;
     },
-    
+
     getData: function() {
         GTop.glibtop_get_loadavg(this.gtop);
         let load = this.gtop.loadavg[0];
-        this.text = "Load average: " + this.gtop.loadavg[0]
+        this.text = _("Load average: ") + this.gtop.loadavg[0]
             + ", " + this.gtop.loadavg[1]
             + ", " + this.gtop.loadavg[2];
         return [load];
     },
-    
+
     getText: function() {
         return this.text;
     }

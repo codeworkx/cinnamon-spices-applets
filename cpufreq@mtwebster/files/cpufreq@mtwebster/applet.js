@@ -23,19 +23,20 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const St = imports.gi.St;
 const Clutter = imports.gi.Clutter;
-
-const PanelMenu = imports.ui.panelMenu;
+const UUID = "cpufreq@mtwebster";
 const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
 const Util = imports.misc.util;
 const FileUtils = imports.misc.fileUtils;
-
+const Gettext = imports.gettext;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const Signals = imports.signals;
 const Cinnamon = imports.gi.Cinnamon;
 const Applet = imports.ui.applet;
 const Settings = imports.ui.settings;
+const AppletDir = imports.ui.appletManager.applets['cpufreq@mtwebster'];
+const PanelMenu = AppletDir.panelMenu;
 
 let start = GLib.get_monotonic_time();
 
@@ -67,6 +68,13 @@ const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
 let height = 22;
 const DEC_WHITE = 16777215;
+
+// Translation support
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
 
 //basic functions
 
@@ -122,8 +130,10 @@ function Panel_Indicator() {
 Panel_Indicator.prototype = {
     __proto__: PanelMenu.Button.prototype,
 
-    _init: function(name, parent) {
-        PanelMenu.Button.prototype._init.call(this, 0.0);
+    _init: function(name, parent, orientation) {
+        PanelMenu.Button.prototype._init.call(this);
+        if(orientation)
+            this.menu._orientation = orientation;
         this.name = name
         this._parent = parent;
         this.buildit();
@@ -223,8 +233,12 @@ Panel_Indicator.prototype = {
             }));
         }
     },
-
     _onButtonPress: function(actor, event) {
+        global.logError("test "+ actor.orientation);
+        if ((this.menu._orientation == 0))
+            this.menu.setOrientation(St.Side.BOTTOM);
+        else if ((this.menu._orientation == 2))
+            this.menu.setOrientation(St.Side.TOP);
         if (global.settings.get_boolean("panel-edit-mode"))
             return false;
         if (event.get_button()==3){
@@ -241,7 +255,7 @@ Panel_Indicator.prototype = {
         }
         this.menu.toggle();
         return true;
-    },
+    }
 };
 
 function CpufreqSelectorBase() {
@@ -249,12 +263,13 @@ function CpufreqSelectorBase() {
 }
 CpufreqSelectorBase.prototype = {
     arg: { governor: '-g', freq: '-f'},
-    _init: function(cpu) {
+    _init: function(cpu, orientation) {
+        this.orientation = orientation;
         this.cpunum = cpu.replace(/cpu/, '');
         this.cpufreq_path = cpu_path + '/' + cpu + '/cpufreq/';
         this.get_avail();
         this.get_cur();
-        this.indicator = new Panel_Indicator(cpu, this);
+        this.indicator = new Panel_Indicator(cpu, this, orientation);
         if ('timeout' in this)
             Mainloop.source_remove(this.timeout);
         this.timeout = Mainloop.timeout_add(refresh_time, Lang.bind(this, this.update));
@@ -264,14 +279,18 @@ CpufreqSelectorBase.prototype = {
         try {
             this.max = rd_nums_frm_file(this.cpufreq_path + '/scaling_max_freq')[0];
             this.min = rd_nums_frm_file(this.cpufreq_path + '/scaling_min_freq')[0];
-            this.avail_freqs = rd_nums_frm_file(this.cpufreq_path + '/scaling_available_frequencies');
             this.avail_governors = rd_frm_file(this.cpufreq_path + '/scaling_available_governors');
+            try {
+                this.avail_freqs = rd_nums_frm_file(this.cpufreq_path + '/scaling_available_frequencies');
+            } catch (e) {
+                 this.avail_freqs = [];
+            }
         } catch (e) {
             let icon = new St.Icon({ icon_name: 'error',
                              icon_type: St.IconType.FULLCOLOR,
                              icon_size: 36 });
-            Main.criticalNotify("CPU frequency scaling unavailable",
-                                "Your system does not appear to support CPU frequency scaling.  Unfortunately this applet is of no use to you.",
+            Main.criticalNotify(_("CPU frequency scaling unavailable"),
+                                _("Your system does not appear to support CPU frequency scaling.  Unfortunately this applet is of no use to you."),
                                 icon);
         }
     },
@@ -360,7 +379,7 @@ function add_cpus_frm_files(cpu_child) {
             if (pattern.test(cpu_child[i].get_name()))
                 cpus.push(cpu_child[i].get_name());
         for (let i in cpus) {
-            selectors[i] = new CpufreqSelectorBase(cpus[i]);
+            selectors[i] = new CpufreqSelectorBase(cpus[i],this.orientation);
             box.add_actor(selectors[i].indicator.actor);
             Main.panel._menus.addMenu(selectors[i].indicator.menu);
         }
@@ -411,7 +430,7 @@ MyApplet.prototype = {
                     this.orientation = orientation;
                     this.instance_id = instance_id;
                     this._initialize_settings();
-                    this.config_menu_item = new Applet.MenuItem("Configure Applet", 'system-run-symbolic',
+                    this.config_menu_item = new Applet.MenuItem(_("Configure Applet"), 'system-run-symbolic',
                                                     Lang.bind(this, this._on_open_settings));
                     this._applet_context_menu.addMenuItem(this.config_menu_item);
                     this.rebuild();
@@ -423,11 +442,11 @@ MyApplet.prototype = {
                         let icon = new St.Icon({ icon_name: 'error',
                                                  icon_type: St.IconType.FULLCOLOR,
                                                  icon_size: 36 });
-                        Main.criticalNotify("CPU frequency switcher program not installed",
-                                "You appear to be missing the required program, 'cpufreq-selector.'  This program is needed to perform scaling or governor switching.\n\n" +
-                                "This program is ordinarily provided by the package: gnome-applets\n\n" +
-                                "If you're on Linux Mint or Ubuntu, you can install this using the following command:\n\n" +
-                                "apt install --no-install-recommends gnome-applets",
+                        Main.criticalNotify(_("CPU frequency switcher program not installed"),
+                                _("You appear to be missing the required program, 'cpufreq-selector.'  This program is needed to perform scaling or governor switching.\n\n") +
+                                _("This program is ordinarily provided by the package: gnome-applets\n\n") +
+                                _("If you're on Linux Mint or Ubuntu, you can install this using the following command:\n\n") +
+                                _("apt install --no-install-recommends gnome-applets"),
                                 icon);
                     }
             } catch (e) {
@@ -520,7 +539,6 @@ MyApplet.prototype = {
                 this.myactor = new St.BoxLayout({ pack_start: true });
                 box = this.myactor;
                 this.actor.add(this.myactor);
-
                 FileUtils.listDirAsync(cpu_dir, Lang.bind(this, add_cpus_frm_files));
                 let finish = GLib.get_monotonic_time();
                 log('cpufreq: use ' + (finish - start));

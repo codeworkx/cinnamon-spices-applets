@@ -6,12 +6,6 @@
   "seperator0": {
     "type": "separator"
   },
-  "autoUpdate": {
-    "type": "checkbox",
-    "default": false,
-    "description": "Update this applet automatically",
-    "tooltip": "When enabled, ITM will check the Github releases on init, and will start to upgrade if it finds a newer version."
-  },
   "WindowList": {
     "type": "header",
     "description": "Window List Settings"
@@ -70,6 +64,12 @@
     "default": true,
     "description": "Arrange pinned apps",
     "tooltip": "Arrange pinned apps into a different order."
+  },
+  "pinOnDrag": {
+    "type": "checkbox",
+    "default": true,
+    "description": "Pin apps when dragged to a new position",
+    "tooltip": "Pin apps when dragged to a new position"
   },
   "middle-click-action": {
     "type": "checkbox",

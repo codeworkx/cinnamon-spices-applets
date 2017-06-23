@@ -1,14 +1,19 @@
 const St = imports.gi.St;
 const Lang = imports.lang;
-const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
 const GLib = imports.gi.GLib;
 const Util = imports.misc.util;
 const Mainloop = imports.mainloop;
 const Applet = imports.ui.applet;
-const Gettext = imports.gettext.domain('cinnamon-applets');
-const _ = Gettext.gettext;
+const Gettext = imports.gettext;
+const UUID = "temperature@fevimu";
+
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
 
 function MyApplet(orientation) {
     this._init(orientation);
@@ -42,12 +47,12 @@ MyApplet.prototype = {
 			
 
 			if(this.sensorsPath){
-				this.title='Error';
-				this.content='Run sensors-detect as root. If it doesn\'t help, click here to report with your sensors output!';
+				this.title=_("Error");
+				this.content=_("Run sensors-detect as root. If it doesn\'t help, click here to report with your sensors output!");
 			}
 			else{
-				this.title='Warning';
-				this.content='Please install lm_sensors. If it doesn\'t help, click here to report with your sensors output!';
+				this.title=_("Warning");
+				this.content=_("Please install lm_sensors. If it doesn\'t help, click here to report with your sensors output!");
 			}
 			
 						
@@ -120,9 +125,9 @@ MyApplet.prototype = {
 		    tempInfo = this._findTemperatureFromFiles();
 		    if(tempInfo.temp){
 		        this.title=this._formatTemp(tempInfo.temp);
-		        items.push('Current Temperature : '+this._formatTemp(tempInfo.temp));
+		        items.push(_("Current Temperature : ")+this._formatTemp(tempInfo.temp));
 		        if (tempInfo.crit)
-		            items.push('Critical Temperature : '+this._formatTemp(tempInfo.crit));
+		            items.push(_("Critical Temperature : ")+this._formatTemp(tempInfo.crit));
 		    }
 		}
 
@@ -131,7 +136,7 @@ MyApplet.prototype = {
             c.destroy()
         });
 
-		let section = new PopupMenu.PopupMenuSection("Temperature");
+		let section = new PopupMenu.PopupMenuSection(_("Temperature"));
         if (items.length>0){
             let item;
             for each (let itemText in items){
@@ -162,7 +167,7 @@ MyApplet.prototype = {
 	},
 	
 	_createSectionForText: function(txt){
-		    let section = new PopupMenu.PopupMenuSection("Temperature");
+		    let section = new PopupMenu.PopupMenuSection(_("Temperature"));
 		    let item = new PopupMenu.PopupMenuItem("");
 		    item.addActor(new St.Label({
 		        text:txt,
@@ -363,13 +368,13 @@ MyApplet.prototype = {
     },
 
     _getContent: function(c){
-        return c.toString()+"\u1d3cC / "+this._toFahrenheit(c).toString()+"\u1d3cF";
+        return c.toString()+" °C / "+this._toFahrenheit(c).toString()+" °F";
     },
 
     _formatTemp: function(t) {
         //uncomment the next line to display temperature in Fahrenheit
-        //return this._toFahrenheit(t).toString()+"\u1d3cF";
-        return (Math.round(t*10)/10).toFixed(1).toString()+"\u1d3cC";
+        //return this._toFahrenheit(t).toString()+" °F";
+        return (Math.round(t*10)/10).toFixed(1).toString()+" °C";
     }
     
     

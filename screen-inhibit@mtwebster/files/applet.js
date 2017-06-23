@@ -10,8 +10,17 @@ try {
     // No settings available, use fallbacks
 }
 
-const INHIBIT_TT = "Currently preventing screensaver";
-const ALLOW_TT = "Currently allowing screensaver";
+const UUID = 'screen-inhibit@mtwebster';
+const Gettext = imports.gettext;
+
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
+
+const INHIBIT_TT = _("Currently preventing screensaver");
+const ALLOW_TT = _("Currently allowing screensaver");
 
 const SessionManagerIface = '\
 <node> \
@@ -103,7 +112,7 @@ MyApplet.prototype = {
             this.on_settings_changed();
         }
 
-        this.screen_menu_item = new Applet.MenuItem("Screensaver settings", 'system-run-symbolic',
+        this.screen_menu_item = new Applet.MenuItem(_("Screensaver settings"), 'system-run-symbolic',
                                                     Lang.bind(this, this._screen_menu));
         this._applet_context_menu.addMenuItem(this.screen_menu_item);
     },

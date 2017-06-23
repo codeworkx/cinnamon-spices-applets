@@ -1,7 +1,7 @@
 const Applet = imports.ui.applet;
 const PopupMenu = imports.ui.popupMenu;
-const Gettext = imports.gettext.domain('cinnamon-extensions');
-const _ = Gettext.gettext;
+const Gettext = imports.gettext;
+const UUID = "xampp-panel@backids99";
 const Util = imports.misc.util;
 const Lang = imports.lang; 
 const GLib = imports.gi.GLib;
@@ -9,12 +9,18 @@ const Gio = imports.gi.Gio;
 const AppletMeta = imports.ui.appletManager.applets['xampp-panel@backids99'];
 const AppletDir = imports.ui.appletManager.appletMeta['xampp-panel@backids99'].path;
 
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
+
 //applet command constants
 var CommandConstants = new function() {
 	this.COMMAND_START_XAMPP = "gksudo /opt/lampp/lampp start";
 	this.COMMAND_STOP_XAMPP = "gksudo /opt/lampp/lampp stop";
 	this.COMMAND_RESTART_XAMPP = "gksudo /opt/lampp/lampp restart";
-	this.COMMAND_PHP_CONFIG_EDIT = "gksudo gedit /opt/lampp/etc/php.ini";
+	this.COMMAND_PHP_CONFIG_EDIT = "gksudo xdg-open /opt/lampp/etc/php.ini";
 	this.COMMAND_LAUNCH_PHPMYADMIN = "xdg-open http://localhost/phpmyadmin/";
 	this.COMMAND_LAUNCH_WEBDIR = "xdg-open http://localhost/";
 	this.COMMAND_OPEN_WEBDIR = "nemo /opt/lampp/htdocs/";
@@ -33,7 +39,7 @@ MyApplet.prototype = {
     _init: function(orientation){
         Applet.IconApplet.prototype._init.call(this, orientation);
         this.set_applet_icon_path( AppletDir + "/" + "xampp.png");
-        this.set_applet_tooltip("Xampp Panel");
+        this.set_applet_tooltip(_("Xampp Panel"));
         
         //setup a new menuManager and add the main context main to the manager
 

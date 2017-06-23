@@ -15,9 +15,16 @@ const Signals = imports.signals;
 const St = imports.gi.St;
 const Tooltips = imports.ui.tooltips;
 const Util = imports.misc.util;
-
+const UUID = "slingshot@jfarthing84";
 const AppletPath = imports.ui.appletManager.applets['slingshot@jfarthing84'];
 const Granite = AppletPath.granite;
+const Gettext = imports.gettext;
+
+Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale")
+
+function _(str) {
+  return Gettext.dgettext(UUID, str);
+}
 
 /** App ***********************************************************************/
 
@@ -1118,7 +1125,7 @@ SlingshotView.prototype = {
         });
         this.viewSelector.append(image, _('View as Grid'));
 
-        let image = new St.Icon({
+        image = new St.Icon({
             icon_size: 16,
             gicon: new Gio.ThemedIcon({ name: 'view-list-symbolic' })
         });
