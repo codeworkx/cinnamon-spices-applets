@@ -1,6 +1,5 @@
 const St = imports.gi.St;
 const Lang = imports.lang;
-const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
 const GLib = imports.gi.GLib;
@@ -86,12 +85,14 @@ MyApplet.prototype = {
                                 items.push("Temperatures");
 
                                 for (let sensname in sensorsInfo[adapter][adanum]) {
-                                    if (sensorsInfo[adapter][adanum][sensname]['temp'] > 0) {
-                                        if (sensname == 'CPU Temp') {
-                                            s += this._formatTemp(sensorsInfo[adapter][adanum][sensname]['temp']) + " ";
-                                            n++;
+                                    if (typeof sensorsInfo[adapter][adanum][sensname]['temp'] !== 'undefined') {
+                                        if (sensorsInfo[adapter][adanum][sensname]['temp'] > 0) {
+                                            if (sensname == 'CPU Temp') {
+                                                s += this._formatTemp(sensorsInfo[adapter][adanum][sensname]['temp']) + " ";
+                                                n++;
+                                            }
+                                            items.push(sensname + ': ' + this._formatTemp(sensorsInfo[adapter][adanum][sensname]['temp']));
                                         }
-                                        items.push(sensname + ': ' + this._formatTemp(sensorsInfo[adapter][adanum][sensname]['temp']));
                                     }
                                 }
 
